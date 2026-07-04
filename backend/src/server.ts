@@ -18,6 +18,7 @@ import formKitRoutes from "./routes/form-kit.routes";
 import importRoutes from "./routes/import.routes";
 import aiRoutes from "./routes/ai.routes";
 import outreachRoutes from "./routes/outreach.routes";
+import trackerRoutes from "./routes/tracker.routes";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +54,7 @@ app.use("/api/form-kit", formKitRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/outreach", outreachRoutes);
+app.use("/api/tracker", trackerRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get("/api/health", async (req, res) => {

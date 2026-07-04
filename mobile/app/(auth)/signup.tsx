@@ -14,26 +14,39 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Spacing, Type } from "@/constants/theme";
 import { Button, Input } from "@/components/ui";
 import { Eye, EyeOff } from "lucide-react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const signupSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters."),
+  email: z.string().email("Please enter a valid email address."),
+  password: z.string().min(6, "Password must be at least 6 characters."),
+});
+
+type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signup } = useAuthStore();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert("Missing Fields", "Please fill in all fields.");
-      return;
-    }
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { name: "", email: "", password: "" },
+  });
+
+  const onSubmit = async (data: SignupFormValues) => {
     setLoading(true);
     try {
-      await signup(name, email, password);
+      await signup(data.name, data.email, data.password);
       router.replace("/(app)/");
     } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.error || "Registration failed. Please try again.");
@@ -54,29 +67,55 @@ export default function SignupScreen() {
         </View>
 
         <View style={styles.formContainer}>
-          <Input
-            label="Full Name"
-            placeholder="Jane Doe"
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="words"
+          <Controller
+            control={control}
+            name="name"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Full Name"
+                placeholder="Jane Doe"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.name?.message}
+                autoCapitalize="words"
+              />
+            )}
           />
-          <Input
-            label="Email Address"
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
+
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Email Address"
+                placeholder="you@example.com"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.email?.message}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            )}
           />
+
           <View>
-            <Input
-              label="Password"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              containerStyle={{ marginBottom: Spacing.xl }}
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Password"
+                  placeholder="••••••••"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.password?.message}
+                  secureTextEntry={!showPassword}
+                  containerStyle={{ marginBottom: Spacing.xl }}
+                />
+              )}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -90,7 +129,7 @@ export default function SignupScreen() {
             </TouchableOpacity>
           </View>
 
-          <Button variant="primary" loading={loading} onPress={handleRegister}>
+          <Button variant="primary" loading={loading} onPress={handleSubmit(onSubmit)}>
             Create Account
           </Button>
 

@@ -14,24 +14,37 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
 import { Button, Input } from "@/components/ui";
 import { Compass, Eye, EyeOff } from "lucide-react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email address."),
+  password: z.string().min(1, "Password is required."),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { login } = useAuthStore();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Missing Fields", "Please enter both email and password.");
-      return;
-    }
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const onSubmit = async (data: LoginFormValues) => {
     setLoading(true);
     try {
-      await login(email, password);
+      await login(data.email, data.password);
       router.replace("/(app)/");
     } catch (err: any) {
       Alert.alert("Login Failed", err?.response?.data?.error || "Invalid credentials.");
@@ -57,22 +70,39 @@ export default function LoginScreen() {
 
         {/* Form */}
         <View style={styles.formContainer}>
-          <Input
-            label="Email Address"
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Email Address"
+                placeholder="you@example.com"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.email?.message}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            )}
           />
+
           <View>
-            <Input
-              label="Password"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              containerStyle={{ marginBottom: Spacing.xl }}
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Password"
+                  placeholder="••••••••"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.password?.message}
+                  secureTextEntry={!showPassword}
+                  containerStyle={{ marginBottom: Spacing.xl }}
+                />
+              )}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -86,7 +116,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <Button variant="primary" loading={loading} onPress={handleLogin}>
+          <Button variant="primary" loading={loading} onPress={handleSubmit(onSubmit)}>
             Sign In
           </Button>
 

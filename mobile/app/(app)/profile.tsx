@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
 import { useAuthStore } from "@/store/authStore";
@@ -19,47 +22,64 @@ import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
 import { Button, Input, Card } from "@/components/ui";
 import { ArrowLeft, User, Shield, Bell } from "lucide-react-native";
 
+const profileSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters."),
+  email: z.string().email("Invalid email address."),
+  notifications: z.object({
+    emailAlerts: z.boolean(),
+    weeklyReport: z.boolean(),
+    interviewRemind: z.boolean(),
+    marketingEmails: z.boolean(),
+  }),
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required."),
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+type PasswordFormValues = z.infer<typeof passwordSchema>;
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const [name, setName] = useState(user?.name ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
-  const [notifications, setNotifications] = useState({
-    emailAlerts: true,
-    weeklyReport: true,
-    interviewRemind: true,
-    marketingEmails: false,
-  });
   const [savingProfile, setSavingProfile] = useState(false);
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+
+  const profileForm = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: user?.name ?? "",
+      email: user?.email ?? "",
+      notifications: {
+        emailAlerts: true,
+        weeklyReport: true,
+        interviewRemind: true,
+        marketingEmails: false,
+      },
+    },
+  });
+
+  const passwordForm = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { currentPassword: "", newPassword: "" },
+  });
 
   useEffect(() => {
     apiClient.get(API_ENDPOINTS.PROFILE).then((res) => {
-      setName(res.data.name ?? "");
-      setEmail(res.data.email ?? "");
-      if (res.data.notifications) {
-        setNotifications(res.data.notifications);
-      }
+      if (res.data.name) profileForm.setValue("name", res.data.name);
+      if (res.data.email) profileForm.setValue("email", res.data.email);
+      if (res.data.notifications) profileForm.setValue("notifications", res.data.notifications);
     }).catch(() => {});
   }, []);
 
-  const handleSaveProfile = async () => {
-    if (name.trim().length < 2) {
-      Alert.alert("Validation", "Name must be at least 2 characters.");
-      return;
-    }
+  const onSaveProfile = async (data: ProfileFormValues) => {
     setSavingProfile(true);
     try {
-      const res = await apiClient.put(API_ENDPOINTS.PROFILE, {
-        name: name.trim(),
-        email: email.trim(),
-        notifications,
-      });
+      const res = await apiClient.put(API_ENDPOINTS.PROFILE, data);
       if (res.data.token) {
         const { saveToken } = await import("@/services/api");
         await saveToken(res.data.token);
@@ -72,33 +92,17 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword) {
-      Alert.alert("Required", "Both current and new password are required.");
-      return;
-    }
-    if (newPassword.length < 8) {
-      Alert.alert("Too short", "New password must be at least 8 characters.");
-      return;
-    }
+  const onChangePassword = async (data: PasswordFormValues) => {
     setSavingPassword(true);
     try {
-      await apiClient.put(API_ENDPOINTS.PASSWORD, {
-        currentPassword,
-        newPassword,
-      });
-      setCurrentPassword("");
-      setNewPassword("");
+      await apiClient.put(API_ENDPOINTS.PASSWORD, data);
+      passwordForm.reset();
       Alert.alert("Success", "Password updated successfully.");
     } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.error || "Failed to change password.");
     } finally {
       setSavingPassword(false);
     }
-  };
-
-  const toggleNotif = (key: keyof typeof notifications) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -118,9 +122,38 @@ export default function ProfileScreen() {
             <User size={20} color={Colors.primaryLight} />
             <Text style={styles.sectionTitle}>Profile Details</Text>
           </View>
-          <Input label="Full Name" value={name} onChangeText={setName} />
-          <Input label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" />
-          <Button variant="secondary" loading={savingProfile} onPress={handleSaveProfile} style={{ marginTop: 8 }}>
+          
+          <Controller
+            control={profileForm.control}
+            name="name"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Full Name"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={profileForm.formState.errors.name?.message}
+              />
+            )}
+          />
+          
+          <Controller
+            control={profileForm.control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Email Address"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                error={profileForm.formState.errors.email?.message}
+              />
+            )}
+          />
+          
+          <Button variant="secondary" loading={savingProfile} onPress={profileForm.handleSubmit(onSaveProfile)} style={{ marginTop: 8 }}>
             Save Changes
           </Button>
         </Card>
@@ -131,9 +164,38 @@ export default function ProfileScreen() {
             <Shield size={20} color={Colors.primaryLight} />
             <Text style={styles.sectionTitle}>Security</Text>
           </View>
-          <Input label="Current Password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
-          <Input label="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
-          <Button variant="secondary" loading={savingPassword} onPress={handleChangePassword} style={{ marginTop: 8 }}>
+          
+          <Controller
+            control={passwordForm.control}
+            name="currentPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Current Password"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                secureTextEntry
+                error={passwordForm.formState.errors.currentPassword?.message}
+              />
+            )}
+          />
+          
+          <Controller
+            control={passwordForm.control}
+            name="newPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="New Password"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                secureTextEntry
+                error={passwordForm.formState.errors.newPassword?.message}
+              />
+            )}
+          />
+          
+          <Button variant="secondary" loading={savingPassword} onPress={passwordForm.handleSubmit(onChangePassword)} style={{ marginTop: 8 }}>
             Update Password
           </Button>
         </Card>
@@ -145,44 +207,62 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Notifications</Text>
           </View>
           
-          <View style={styles.switchRow}>
-            <View style={styles.switchTextCol}>
-              <Text style={styles.switchLabel}>Email Alerts</Text>
-              <Text style={styles.switchDesc}>Status changes and deadlines</Text>
-            </View>
-            <Switch
-              value={notifications.emailAlerts}
-              onValueChange={() => toggleNotif("emailAlerts")}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#FFF"
-            />
-          </View>
+          <Controller
+            control={profileForm.control}
+            name="notifications.emailAlerts"
+            render={({ field: { onChange, value } }) => (
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={styles.switchLabel}>Email Alerts</Text>
+                  <Text style={styles.switchDesc}>Status changes and deadlines</Text>
+                </View>
+                <Switch
+                  value={value}
+                  onValueChange={onChange}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor="#FFF"
+                />
+              </View>
+            )}
+          />
 
-          <View style={styles.switchRow}>
-            <View style={styles.switchTextCol}>
-              <Text style={styles.switchLabel}>Weekly Report</Text>
-              <Text style={styles.switchDesc}>Summary of your activity</Text>
-            </View>
-            <Switch
-              value={notifications.weeklyReport}
-              onValueChange={() => toggleNotif("weeklyReport")}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#FFF"
-            />
-          </View>
+          <Controller
+            control={profileForm.control}
+            name="notifications.weeklyReport"
+            render={({ field: { onChange, value } }) => (
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={styles.switchLabel}>Weekly Report</Text>
+                  <Text style={styles.switchDesc}>Summary of your activity</Text>
+                </View>
+                <Switch
+                  value={value}
+                  onValueChange={onChange}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor="#FFF"
+                />
+              </View>
+            )}
+          />
 
-          <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
-            <View style={styles.switchTextCol}>
-              <Text style={styles.switchLabel}>Interview Reminders</Text>
-              <Text style={styles.switchDesc}>24 hours before interview</Text>
-            </View>
-            <Switch
-              value={notifications.interviewRemind}
-              onValueChange={() => toggleNotif("interviewRemind")}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#FFF"
-            />
-          </View>
+          <Controller
+            control={profileForm.control}
+            name="notifications.interviewRemind"
+            render={({ field: { onChange, value } }) => (
+              <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+                <View style={styles.switchTextCol}>
+                  <Text style={styles.switchLabel}>Interview Reminders</Text>
+                  <Text style={styles.switchDesc}>24 hours before interview</Text>
+                </View>
+                <Switch
+                  value={value}
+                  onValueChange={onChange}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor="#FFF"
+                />
+              </View>
+            )}
+          />
         </Card>
 
       </ScrollView>

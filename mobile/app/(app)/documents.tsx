@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
 import { Colors, Spacing, Type } from "@/constants/theme";
@@ -21,30 +23,49 @@ import { FileText, ArrowLeft, UploadCloud, Trash2 } from "lucide-react-native";
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
 
-  const loadDocuments = async () => {
-    try {
+  const { data: documents = [], isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ["documents"],
+    queryFn: async () => {
       const res = await apiClient.get(API_ENDPOINTS.DOCUMENTS);
-      setDocuments(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+      return res.data;
+    },
+  });
 
-  useEffect(() => {
-    loadDocuments();
-  }, []);
+  const uploadMutation = useMutation({
+    mutationFn: async (payload: { name: string; type: string; mimeType: string; data: string; sizeBytes: number }) => {
+      const res = await apiClient.post(API_ENDPOINTS.DOCUMENTS, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      Alert.alert("Success", "Document uploaded successfully");
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err?.response?.data?.error || "Failed to upload document");
+    },
+    onSettled: () => setUploading(false),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiClient.delete(`${API_ENDPOINTS.DOCUMENTS}/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err?.response?.data?.error || "Failed to delete document");
+    },
+  });
 
   const handleUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
+        type: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
         copyToCacheDirectory: true,
       });
       if (result.canceled) return;
@@ -55,9 +76,20 @@ export default function DocumentsScreen() {
         return;
       }
       
-      Alert.alert("Upload simulated", `Would upload: ${file.name}`);
-      // Upload simulation...
+      setUploading(true);
+      const base64Data = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      uploadMutation.mutate({
+        name: file.name,
+        type: "RESUME",
+        mimeType: file.mimeType || "application/pdf",
+        data: `data:${file.mimeType || "application/pdf"};base64,${base64Data}`,
+        sizeBytes: file.size || 0,
+      });
     } catch (err) {
+      setUploading(false);
       Alert.alert("Error", "Failed to select document");
     }
   };
@@ -65,10 +97,7 @@ export default function DocumentsScreen() {
   const handleDelete = (id: string) => {
     Alert.alert("Delete", "Remove this document?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => {
-        setDocuments(prev => prev.filter(d => d.id !== id));
-        apiClient.delete(`${API_ENDPOINTS.DOCUMENTS}/${id}`).catch(() => loadDocuments());
-      }},
+      { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(id) },
     ]);
   };
 
@@ -96,19 +125,23 @@ export default function DocumentsScreen() {
           <ArrowLeft size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Documents</Text>
-        <TouchableOpacity onPress={handleUpload}>
-          <UploadCloud size={24} color={Colors.primaryLight} />
-        </TouchableOpacity>
+        {uploading ? (
+          <ActivityIndicator size="small" color={Colors.primary} />
+        ) : (
+          <TouchableOpacity onPress={handleUpload}>
+            <UploadCloud size={24} color={Colors.primaryLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {loading ? (
+      {isLoading ? (
         <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={documents}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDocuments(); }} tintColor={Colors.primary} />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={Colors.primary} />}
           ListEmptyComponent={
             <EmptyState
               icon={FileText}

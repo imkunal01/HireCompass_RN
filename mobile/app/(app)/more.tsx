@@ -88,6 +88,7 @@ export default function MoreScreen() {
           <MenuItem icon={FileText} label="Documents" onPress={() => router.push("/(app)/documents")} />
           <MenuItem icon={Download} label="Import Job" onPress={() => router.push("/(app)/import")} />
           <MenuItem icon={Zap} label="AI Tools" onPress={() => router.push("/(app)/ai-tools")} />
+          <MenuItem icon={Target} label="DSA & Goals Tracker" onPress={() => router.push("/(app)/tracker")} />
         </Card>
 
         {/* Network Section */}

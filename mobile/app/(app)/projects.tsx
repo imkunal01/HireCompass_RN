@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
 import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
@@ -20,25 +21,14 @@ import { Briefcase, ArrowLeft, ExternalLink, Github } from "lucide-react-native"
 export default function ProjectsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [projects, setProjects] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const loadProjects = async () => {
-    try {
+  const { data: projects = [], isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ["projects"],
+    queryFn: async () => {
       const res = await apiClient.get(API_ENDPOINTS.PROJECTS);
-      setProjects(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProjects();
-  }, []);
+      return res.data;
+    },
+  });
 
   const renderItem = ({ item }: { item: any }) => (
     <Card variant="elevated" style={styles.card}>
@@ -81,14 +71,14 @@ export default function ProjectsScreen() {
         <Text style={styles.title}>Projects</Text>
       </View>
 
-      {loading ? (
+      {isLoading ? (
         <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={projects}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadProjects(); }} tintColor={Colors.primary} />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={Colors.primary} />}
           ListEmptyComponent={
             <EmptyState
               icon={Briefcase}

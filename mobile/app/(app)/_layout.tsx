@@ -44,7 +44,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           if (route.name === "more") IconCmp = Grid;
 
           // Don't render hidden screens if any exist
-          if (["profile", "documents", "import", "outreach", "projects", "ai-tools", "reminders"].includes(route.name)) return null;
+          if (["profile", "documents", "import", "outreach", "projects", "ai-tools", "reminders", "tracker"].includes(route.name)) return null;
 
           return (
             <TouchableOpacity
