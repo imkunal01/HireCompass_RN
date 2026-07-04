@@ -6,11 +6,9 @@ import {
   FlatList,
   TouchableOpacity,
   Modal,
-  ScrollView,
   RefreshControl,
   ActivityIndicator,
   Alert,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -18,13 +16,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  FontSize,
-  FontWeight,
-} from "@/constants/theme";
+import { Colors, Spacing, BorderRadius, Type } from "@/constants/theme";
+import { Card, EmptyState, Button, Input } from "@/components/ui";
+import { Clock, Mail, CalendarDays, Bell, Check, ArrowLeft, Plus } from "lucide-react-native";
 
 interface Reminder {
   id: string;
@@ -37,11 +31,11 @@ interface Reminder {
   done: boolean;
 }
 
-const TYPE_EMOJI: Record<string, string> = {
-  DEADLINE: "⏰",
-  FOLLOWUP: "📬",
-  INTERVIEW: "🗓️",
-  CUSTOM: "🔔",
+const TYPE_ICON: Record<string, any> = {
+  DEADLINE: Clock,
+  FOLLOWUP: Mail,
+  INTERVIEW: CalendarDays,
+  CUSTOM: Bell,
 };
 
 function timeFromNow(dateStr: string): string {
@@ -56,217 +50,6 @@ function timeFromNow(dateStr: string): string {
   return `${past ? "" : "in "}${mins}m${past ? " ago" : ""}`;
 }
 
-function ReminderCard({
-  item,
-  onToggle,
-  onSnooze,
-  onDelete,
-}: {
-  item: Reminder;
-  onToggle: () => void;
-  onSnooze: (option: string) => void;
-  onDelete: () => void;
-}) {
-  const isOverdue = !item.done && new Date(item.dueAt) < new Date();
-
-  return (
-    <View
-      style={[
-        styles.card,
-        item.done && styles.cardDone,
-        isOverdue && styles.cardOverdue,
-      ]}
-    >
-      <TouchableOpacity style={styles.checkBtn} onPress={onToggle} activeOpacity={0.7}>
-        <View
-          style={[styles.checkbox, item.done && styles.checkboxDone]}
-        >
-          {item.done && <Text style={styles.checkmark}>✓</Text>}
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.typeEmoji}>{TYPE_EMOJI[item.type] ?? "🔔"}</Text>
-          <Text style={[styles.typeName, item.done && styles.textDone]}>
-            {item.type.replace("_", " ")}
-          </Text>
-          <Text
-            style={[
-              styles.dueTime,
-              isOverdue && styles.overdue,
-              item.done && styles.textDone,
-            ]}
-          >
-            {timeFromNow(item.dueAt)}
-          </Text>
-        </View>
-        {item.message && (
-          <Text
-            style={[styles.message, item.done && styles.textDone]}
-            numberOfLines={2}
-          >
-            {item.message}
-          </Text>
-        )}
-        {(item.company || item.jobTitle) && (
-          <Text style={styles.jobRef}>
-            {item.company} {item.jobTitle ? `· ${item.jobTitle}` : ""}
-          </Text>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={styles.moreBtn}
-        onPress={() => {
-          Alert.alert(
-            "Reminder Options",
-            "",
-            [
-              {
-                text: "Snooze 1 day",
-                onPress: () => onSnooze("1day"),
-              },
-              {
-                text: "Snooze 3 days",
-                onPress: () => onSnooze("3days"),
-              },
-              {
-                text: "Snooze 1 week",
-                onPress: () => onSnooze("1week"),
-              },
-              {
-                text: "Delete",
-                style: "destructive",
-                onPress: onDelete,
-              },
-              { text: "Cancel", style: "cancel" },
-            ]
-          );
-        }}
-      >
-        <Text style={styles.moreBtnText}>•••</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function AddReminderModal({
-  visible,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSave: (data: Partial<Reminder>) => void;
-}) {
-  const [type, setType] = useState("CUSTOM");
-  const [message, setMessage] = useState("");
-  const [dueDate, setDueDate] = useState(
-    new Date(Date.now() + 86400000).toISOString().split("T")[0]
-  );
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!dueDate) {
-      Alert.alert("Required", "Due date is required.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave({
-        type,
-        message,
-        dueAt: new Date(dueDate).toISOString(),
-      });
-      onClose();
-      setMessage("");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: Colors.bgModal }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View style={modalStyles.header}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={modalStyles.cancelBtn}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={modalStyles.title}>Add Reminder</Text>
-          <TouchableOpacity onPress={handleSave} disabled={saving}>
-            {saving ? (
-              <ActivityIndicator color={Colors.primary} size="small" />
-            ) : (
-              <Text style={modalStyles.saveBtn}>Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-        <ScrollView
-          style={modalStyles.form}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={modalStyles.fieldGroup}>
-            <Text style={modalStyles.label}>Type</Text>
-            <View style={modalStyles.chipRow}>
-              {["CUSTOM", "FOLLOWUP", "DEADLINE", "INTERVIEW"].map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  style={[
-                    modalStyles.chip,
-                    type === t && modalStyles.chipActive,
-                  ]}
-                  onPress={() => setType(t)}
-                >
-                  <Text
-                    style={[
-                      modalStyles.chipText,
-                      type === t && modalStyles.chipTextActive,
-                    ]}
-                  >
-                    {TYPE_EMOJI[t]} {t}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={modalStyles.fieldGroup}>
-            <Text style={modalStyles.label}>Due Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={modalStyles.input}
-              value={dueDate}
-              onChangeText={setDueDate}
-              placeholder="2024-12-25"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="numbers-and-punctuation"
-            />
-          </View>
-          <View style={modalStyles.fieldGroup}>
-            <Text style={modalStyles.label}>Message</Text>
-            <TextInput
-              style={[modalStyles.input, modalStyles.textarea]}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="What do you need to do?"
-              placeholderTextColor={Colors.textMuted}
-              multiline
-            />
-          </View>
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 export default function RemindersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -274,255 +57,287 @@ export default function RemindersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [tab, setTab] = useState<"pending" | "done">("pending");
 
-  const load = useCallback(async () => {
+  const [formType, setFormType] = useState("FOLLOWUP");
+  const [formDue, setFormDue] = useState("");
+  const [formMsg, setFormMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadReminders = useCallback(async () => {
     try {
-      const res = await apiClient.get(API_ENDPOINTS.REMINDERS, {
-        params: { status: tab },
-      });
+      const res = await apiClient.get(API_ENDPOINTS.REMINDERS);
       setReminders(res.data);
-    } catch (e) {
-      console.error("Reminders load error", e);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tab]);
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    load();
-  }, [tab]);
+    loadReminders();
+  }, [loadReminders]);
 
-  const handleToggle = async (id: string, currentDone: boolean) => {
+  const toggleDone = async (id: string, current: boolean) => {
+    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, done: !current } : r)));
     try {
-      await apiClient.patch(`${API_ENDPOINTS.REMINDERS}/${id}`, {
-        done: !currentDone,
+      await apiClient.put(`${API_ENDPOINTS.REMINDERS}/${id}`, { done: !current });
+    } catch (err) {
+      setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, done: current } : r)));
+    }
+  };
+
+  const deleteReminder = async (id: string) => {
+    Alert.alert("Delete", "Remove this reminder?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setReminders((prev) => prev.filter((r) => r.id !== id));
+          try {
+            await apiClient.delete(`${API_ENDPOINTS.REMINDERS}/${id}`);
+          } catch (err) {
+            loadReminders();
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleAdd = async () => {
+    if (!formDue || !formMsg) {
+      Alert.alert("Error", "Due date and message required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiClient.post(API_ENDPOINTS.REMINDERS, {
+        type: formType,
+        dueAt: new Date(formDue).toISOString(),
+        message: formMsg,
       });
-      load();
-    } catch {
-      Alert.alert("Error", "Failed to update reminder.");
+      setShowModal(false);
+      setFormType("FOLLOWUP");
+      setFormMsg("");
+      loadReminders();
+    } catch (err) {
+      Alert.alert("Error", "Failed to add reminder");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSnooze = async (id: string, option: string) => {
-    try {
-      await apiClient.patch(`${API_ENDPOINTS.REMINDERS}/${id}`, {
-        snooze: option,
-      });
-      load();
-    } catch {
-      Alert.alert("Error", "Failed to snooze reminder.");
-    }
-  };
+  const renderItem = ({ item }: { item: Reminder }) => {
+    const isOverdue = !item.done && new Date(item.dueAt) < new Date();
+    const IconCmp = TYPE_ICON[item.type] ?? Bell;
 
-  const handleDelete = async (id: string) => {
-    try {
-      await apiClient.delete(`${API_ENDPOINTS.REMINDERS}/${id}`);
-      load();
-    } catch {
-      Alert.alert("Error", "Failed to delete reminder.");
-    }
-  };
-
-  const handleSave = async (data: Partial<Reminder>) => {
-    try {
-      await apiClient.post(API_ENDPOINTS.REMINDERS, data);
-      load();
-    } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.error || "Failed to save reminder");
-      throw err;
-    }
+    return (
+      <Card variant="elevated" style={[styles.card, item.done && styles.cardDone]}>
+        <View style={styles.cardRow}>
+          <TouchableOpacity
+            style={[styles.checkbox, item.done && styles.checkboxDone]}
+            onPress={() => toggleDone(item.id, item.done)}
+          >
+            {item.done && <Check size={14} color={Colors.surface} strokeWidth={3} />}
+          </TouchableOpacity>
+          
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <View style={styles.typePill}>
+                <IconCmp size={12} color={Colors.primaryLight} strokeWidth={2} />
+                <Text style={styles.typeText}>{item.type}</Text>
+              </View>
+              <Text style={[styles.dueText, isOverdue && !item.done && styles.overdue]}>
+                {timeFromNow(item.dueAt)}
+              </Text>
+            </View>
+            <Text style={[styles.message, item.done && styles.textDone]}>{item.message}</Text>
+            {item.jobTitle && (
+              <Text style={styles.contextText}>For: {item.jobTitle} at {item.company}</Text>
+            )}
+          </View>
+        </View>
+        <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteReminder(item.id)}>
+          <Text style={styles.deleteBtnText}>Delete</Text>
+        </TouchableOpacity>
+      </Card>
+    );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.pageHeader}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-        >
-          <Text style={styles.backBtnText}>‹ Back</Text>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.pageTitle}>Reminders</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setShowModal(true)}
-        >
-          <Text style={styles.addBtnText}>+ Add</Text>
+        <Text style={styles.title}>Reminders</Text>
+        <TouchableOpacity onPress={() => setShowModal(true)}>
+          <Plus size={24} color={Colors.primaryLight} />
         </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabsRow}>
-        {(["pending", "done"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === "pending" ? "🔔 Pending" : "✅ Done"}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={Colors.primary} size="large" />
-        </View>
+        <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={reminders}
-          keyExtractor={(i) => i.id}
-          renderItem={({ item }) => (
-            <ReminderCard
-              item={item}
-              onToggle={() => handleToggle(item.id, item.done)}
-              onSnooze={(opt) => handleSnooze(item.id, opt)}
-              onDelete={() => handleDelete(item.id)}
-            />
-          )}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor={Colors.primary}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>🔔</Text>
-              <Text style={styles.emptyTitle}>
-                {tab === "pending" ? "No pending reminders" : "No completed reminders"}
-              </Text>
-              {tab === "pending" && (
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => setShowModal(true)}
-                >
-                  <Text style={styles.emptyBtnText}>+ Add Reminder</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadReminders(); }} tintColor={Colors.primary} />}
+          ListEmptyComponent={<EmptyState icon={Bell} title="All caught up" description="You have no active reminders." />}
+          renderItem={renderItem}
         />
       )}
 
-      <AddReminderModal
-        visible={showModal}
-        onClose={() => setShowModal(false)}
-        onSave={handleSave}
-      />
+      {/* Add Modal */}
+      <Modal visible={showModal} animationType="slide" transparent>
+        <View style={styles.modalBg}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Reminder</Text>
+              <TouchableOpacity onPress={() => setShowModal(false)}><Text style={styles.cancelBtn}>Cancel</Text></TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalContent}>
+              <Text style={styles.label}>Type</Text>
+              <View style={styles.typeChips}>
+                {["FOLLOWUP", "DEADLINE", "INTERVIEW", "CUSTOM"].map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.chip, formType === t && styles.chipActive]}
+                    onPress={() => setFormType(t)}
+                  >
+                    <Text style={[styles.chipText, formType === t && styles.chipTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Input label="Due Date (YYYY-MM-DD)" value={formDue} onChangeText={setFormDue} placeholder="e.g. 2024-12-25" />
+              <Input label="Message" value={formMsg} onChangeText={setFormMsg} placeholder="Send thank you email" multiline style={{ minHeight: 80 }} />
+              
+              <Button variant="primary" loading={saving} onPress={handleAdd} style={{ marginTop: 16 }}>
+                Save Reminder
+              </Button>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  pageHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  backBtn: {
+    padding: Spacing.sm,
+  },
+  title: {
+    ...Type.h2,
+  },
+  listContent: {
+    padding: Spacing.lg,
+    paddingBottom: 120,
+  },
+  card: {
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+  },
+  cardDone: {
+    opacity: 0.6,
+  },
+  cardRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxDone: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    marginBottom: 6,
   },
-  backBtn: { padding: 4 },
-  backBtnText: { color: Colors.primary, fontSize: FontSize.md },
-  pageTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-  },
-  addBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 7,
+  typePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
-  addBtnText: { color: "#fff", fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
-  tabsRow: {
-    flexDirection: "row",
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.md,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  typeText: {
+    ...Type.micro,
+    color: Colors.primaryLight,
   },
-  tab: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: BorderRadius.sm },
-  tabActive: { backgroundColor: Colors.primary },
-  tabText: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
-  tabTextActive: { color: "#fff", fontWeight: FontWeight.semibold },
-  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
+  dueText: {
+    ...Type.micro,
+    color: Colors.textMuted,
   },
-  cardDone: { opacity: 0.6 },
-  cardOverdue: { borderColor: Colors.error + "40", borderLeftWidth: 3, borderLeftColor: Colors.error },
-  checkBtn: { paddingTop: 2 },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    justifyContent: "center",
-    alignItems: "center",
+  overdue: {
+    color: Colors.error,
   },
-  checkboxDone: { backgroundColor: Colors.success, borderColor: Colors.success },
-  checkmark: { color: "#fff", fontSize: 12, fontWeight: FontWeight.bold },
-  cardContent: { flex: 1 },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  message: {
+    ...Type.bodyMed,
     marginBottom: 4,
   },
-  typeEmoji: { fontSize: 14 },
-  typeName: { color: Colors.text, fontSize: FontSize.sm, fontWeight: FontWeight.medium, flex: 1 },
-  dueTime: { color: Colors.textSecondary, fontSize: FontSize.xs },
-  overdue: { color: Colors.error },
-  textDone: { color: Colors.textMuted, textDecorationLine: "line-through" },
-  message: { color: Colors.textSecondary, fontSize: FontSize.xs, marginBottom: 4 },
-  jobRef: { color: Colors.textMuted, fontSize: FontSize.xs },
-  moreBtn: { padding: 4 },
-  moreBtnText: { color: Colors.textMuted, fontSize: FontSize.sm, letterSpacing: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyContainer: { alignItems: "center", paddingVertical: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: Spacing.md },
-  emptyTitle: {
-    color: Colors.text,
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    marginBottom: Spacing.md,
-    textAlign: "center",
+  textDone: {
+    textDecorationLine: "line-through",
+    color: Colors.textMuted,
   },
-  emptyBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
+  contextText: {
+    ...Type.caption,
+    color: Colors.textFaint,
   },
-  emptyBtnText: { color: "#fff", fontWeight: FontWeight.semibold, fontSize: FontSize.sm },
-});
-
-const modalStyles = StyleSheet.create({
-  header: {
+  deleteBtn: {
+    alignSelf: "flex-end",
+    marginTop: 8,
+  },
+  deleteBtnText: {
+    ...Type.caption,
+    color: Colors.error,
+  },
+  modalBg: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  modalContainer: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    minHeight: 400,
+  },
+  modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -530,33 +345,43 @@ const modalStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  cancelBtn: { color: Colors.textSecondary, fontSize: FontSize.md },
-  title: { color: Colors.text, fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-  saveBtn: { color: Colors.primary, fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-  form: { flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
-  fieldGroup: { marginBottom: Spacing.md },
-  label: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium, marginBottom: 6 },
-  input: {
-    backgroundColor: Colors.bgInput,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 13,
-    color: Colors.text,
-    fontSize: FontSize.sm,
+  modalTitle: {
+    ...Type.h2,
   },
-  textarea: { minHeight: 80, textAlignVertical: "top" },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 4 },
+  cancelBtn: {
+    ...Type.body,
+    color: Colors.textMuted,
+  },
+  modalContent: {
+    padding: Spacing.lg,
+  },
+  label: {
+    ...Type.caption,
+    color: Colors.textMuted,
+    marginBottom: 8,
+  },
+  typeChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: Spacing.lg,
+  },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.bgInput,
+    borderRadius: BorderRadius.pill,
+    backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  chipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
-  chipText: { color: Colors.textSecondary, fontSize: FontSize.xs },
-  chipTextActive: { color: Colors.primaryLight, fontWeight: FontWeight.semibold },
+  chipActive: {
+    backgroundColor: Colors.primaryMuted,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    ...Type.caption,
+  },
+  chipTextActive: {
+    color: Colors.primaryLight,
+  },
 });

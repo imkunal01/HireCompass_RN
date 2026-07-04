@@ -83,7 +83,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = client.db().collection("cv_documents");
 
     const doc = await col.findOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 
@@ -113,7 +113,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = client.db().collection("cv_documents");
 
     const result = await col.updateOne(
-      { _id: new ObjectId(req.params.id), userId: req.user!.id },
+      { _id: new ObjectId(req.params.id as string), userId: req.user!.id },
       { $set: { name, type, targetRole, updatedAt: new Date() } }
     );
 
@@ -135,7 +135,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = client.db().collection("cv_documents");
 
     const result = await col.deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 

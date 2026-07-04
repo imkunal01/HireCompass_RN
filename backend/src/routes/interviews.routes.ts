@@ -77,7 +77,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = db.collection("interviews");
 
     const result = await col.findOneAndUpdate(
-      { _id: new ObjectId(req.params.id), userId: req.user!.id },
+      { _id: new ObjectId(req.params.id as string), userId: req.user!.id },
       { $set: { ...updates, updatedAt: new Date() } },
       { returnDocument: "after" }
     );
@@ -101,7 +101,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = db.collection("interviews");
 
     const result = await col.deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 

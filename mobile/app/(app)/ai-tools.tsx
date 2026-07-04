@@ -1,110 +1,76 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { streamFetch } from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
-import apiClient from "@/services/api";
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  FontSize,
-  FontWeight,
-} from "@/constants/theme";
+import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
+import { Card, Button, Input } from "@/components/ui";
+import { Zap, ArrowLeft, Target, BookOpen } from "lucide-react-native";
 
-type AITool = "email" | "cover" | "match" | "learning";
+type Tab = "COVER_LETTER" | "MATCH_SCORE" | "LEARNING_PLAN";
 
 export default function AIToolsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTool, setActiveTool] = useState<AITool>("email");
+  const [activeTab, setActiveTab] = useState<Tab>("COVER_LETTER");
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.pageHeader}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>‹ Back</Text>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.pageTitle}>AI Tools</Text>
+        <Text style={styles.title}>AI Toolkit</Text>
       </View>
 
-      {/* Tool tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabScroll}
-        contentContainerStyle={styles.tabContent}
-      >
-        {(
-          [
-            { id: "email", emoji: "📧", label: "Cold Email" },
-            { id: "cover", emoji: "✉️", label: "Cover Letter" },
-            { id: "match", emoji: "🎯", label: "Match Score" },
-            { id: "learning", emoji: "📚", label: "Learning Plan" },
-          ] as { id: AITool; emoji: string; label: string }[]
-        ).map((t) => (
-          <TouchableOpacity
-            key={t.id}
-            style={[styles.tab, activeTool === t.id && styles.tabActive]}
-            onPress={() => setActiveTool(t.id)}
-          >
-            <Text style={styles.tabEmoji}>{t.emoji}</Text>
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTool === t.id && styles.tabLabelActive,
-              ]}
-            >
-              {t.label}
-            </Text>
+      <View style={styles.tabContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+          <TouchableOpacity style={[styles.tabBtn, activeTab === "COVER_LETTER" && styles.tabBtnActive]} onPress={() => setActiveTab("COVER_LETTER")}>
+            <Zap size={16} color={activeTab === "COVER_LETTER" ? Colors.text : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === "COVER_LETTER" && styles.tabTextActive]}>Cover Letter</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          style={styles.toolArea}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {activeTool === "email" && <EmailGenerator type="email" />}
-          {activeTool === "cover" && <EmailGenerator type="cover" />}
-          {activeTool === "match" && <MatchScoreTool />}
-          {activeTool === "learning" && <LearningPlanTool />}
-          <View style={{ height: 80 }} />
+          <TouchableOpacity style={[styles.tabBtn, activeTab === "MATCH_SCORE" && styles.tabBtnActive]} onPress={() => setActiveTab("MATCH_SCORE")}>
+            <Target size={16} color={activeTab === "MATCH_SCORE" ? Colors.text : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === "MATCH_SCORE" && styles.tabTextActive]}>Match Score</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabBtn, activeTab === "LEARNING_PLAN" && styles.tabBtnActive]} onPress={() => setActiveTab("LEARNING_PLAN")}>
+            <BookOpen size={16} color={activeTab === "LEARNING_PLAN" ? Colors.text : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === "LEARNING_PLAN" && styles.tabTextActive]}>Learning Plan</Text>
+          </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {activeTab === "COVER_LETTER" && <CoverLetterTool />}
+        {activeTab === "MATCH_SCORE" && <MatchScoreTool />}
+        {activeTab === "LEARNING_PLAN" && <LearningPlanTool />}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-// ─── Email / Cover Letter Generator ──────────────────────────────────────────
-function EmailGenerator({ type }: { type: "email" | "cover" }) {
+// ─── Cover Letter Tool ────────────────────────────────────────────────────────
+function CoverLetterTool() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
-  const [tone, setTone] = useState("Professional");
+  const [skills, setSkills] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
-  const tones = ["Professional", "Friendly", "Formal", "Enthusiastic"];
 
   const handleGenerate = async () => {
     if (!company.trim() || !role.trim()) {
-      Alert.alert("Required", "Company and role are required.");
+      Alert.alert("Required", "Company and Role are required.");
       return;
     }
     setOutput("");
@@ -113,10 +79,14 @@ function EmailGenerator({ type }: { type: "email" | "cover" }) {
     await streamFetch(
       API_ENDPOINTS.AI_GENERATE_EMAIL,
       {
-        job: { company: company.trim(), title: role.trim() },
-        userProfile: {},
-        templateType: tone,
-        type,
+        type: "cover",
+        job: {
+          company,
+          title: role,
+          skills: skills.split(",").map((s) => s.trim()),
+        },
+        userProfile: { name: "User", skills: [] }, // Mocked for now, in a real app fetch from user store
+        templateType: "Professional",
       },
       (chunk) => setOutput((prev) => prev + chunk),
       () => setLoading(false),
@@ -128,258 +98,120 @@ function EmailGenerator({ type }: { type: "email" | "cover" }) {
   };
 
   return (
-    <View style={toolStyles.section}>
-      <Text style={toolStyles.toolTitle}>
-        {type === "email" ? "📧 Cold Email Generator" : "✉️ Cover Letter Generator"}
-      </Text>
-      <Text style={toolStyles.toolSubtitle}>
-        AI-generated, personalized outreach in seconds
-      </Text>
-
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Target Company</Text>
-        <TextInput
-          style={toolStyles.input}
-          value={company}
-          onChangeText={setCompany}
-          placeholder="e.g. Stripe"
-          placeholderTextColor={Colors.textMuted}
-        />
-      </View>
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Role</Text>
-        <TextInput
-          style={toolStyles.input}
-          value={role}
-          onChangeText={setRole}
-          placeholder="e.g. Software Engineer Intern"
-          placeholderTextColor={Colors.textMuted}
-        />
-      </View>
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Tone</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={toolStyles.chipRow}>
-            {tones.map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[toolStyles.chip, tone === t && toolStyles.chipActive]}
-                onPress={() => setTone(t)}
-              >
-                <Text
-                  style={[
-                    toolStyles.chipText,
-                    tone === t && toolStyles.chipTextActive,
-                  ]}
-                >
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-
-      <TouchableOpacity
-        style={[toolStyles.generateBtn, loading && toolStyles.generateBtnDisabled]}
-        onPress={handleGenerate}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={toolStyles.generateBtnText}>
-            ✨ Generate {type === "email" ? "Email" : "Cover Letter"}
-          </Text>
-        )}
-      </TouchableOpacity>
-
+    <Card variant="elevated" style={styles.toolCard}>
+      <Text style={styles.toolTitle}>Cover Letter Generator</Text>
+      <Text style={styles.toolDesc}>Generate a tailored cover letter based on the job requirements.</Text>
+      <Input placeholder="Company Name" value={company} onChangeText={setCompany} />
+      <Input placeholder="Job Title" value={role} onChangeText={setRole} />
+      <Input placeholder="Key Skills (comma separated)" value={skills} onChangeText={setSkills} containerStyle={{ marginBottom: Spacing.xl }} />
+      <Button variant="primary" loading={loading} onPress={handleGenerate} disabled={loading}>
+        Generate Draft
+      </Button>
       {output !== "" && (
-        <View style={toolStyles.outputBox}>
-          <Text style={toolStyles.outputLabel}>Generated Output</Text>
-          <Text style={toolStyles.outputText}>{output}</Text>
-          {loading && (
-            <Text style={toolStyles.streamingIndicator}>
-              ▋ Generating...
-            </Text>
-          )}
+        <View style={styles.outputBox}>
+          <Text style={styles.outputText}>{output}</Text>
+          {loading && <Text style={styles.streamingIndicator}>▋</Text>}
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 // ─── Match Score Tool ─────────────────────────────────────────────────────────
 function MatchScoreTool() {
-  const [company, setCompany] = useState("");
-  const [role, setRole] = useState("");
-  const [skills, setSkills] = useState("");
-  const [userSkills, setUserSkills] = useState("");
+  const [desc, setDesc] = useState("");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleAnalyze = async () => {
-    if (!company.trim() || !role.trim()) {
-      Alert.alert("Required", "Company and role are required.");
-      return;
-    }
+  const handleScore = async () => {
+    if (!desc.trim()) return;
     setLoading(true);
     setResult(null);
-    try {
-      const res = await apiClient.post(API_ENDPOINTS.AI_MATCH_SCORE, {
-        job: {
-          company: company.trim(),
-          title: role.trim(),
-          skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
-        },
-        user: {
-          skills: userSkills.split(",").map((s) => s.trim()).filter(Boolean),
-        },
-      });
-      setResult(res.data);
-    } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.error || "Analysis failed.");
-    } finally {
-      setLoading(false);
-    }
+
+    let buffer = "";
+    await streamFetch(
+      API_ENDPOINTS.AI_MATCH_SCORE,
+      {
+        job: { description: desc },
+        userProfile: { skills: ["React Native", "TypeScript", "Node.js"] }, // Mock profile
+      },
+      (chunk) => { buffer += chunk; },
+      () => {
+        setLoading(false);
+        try {
+          // Streaming may return JSON inside a block, similar to import parser
+          const clean = buffer.replace(/```json|```/g, "").trim();
+          setResult(JSON.parse(clean));
+        } catch (e) {
+          Alert.alert("Error", "Failed to parse AI score result.");
+        }
+      },
+      (err) => {
+        setLoading(false);
+        Alert.alert("AI Error", err);
+      }
+    );
   };
 
-  const scoreColor =
-    result?.score >= 75
-      ? Colors.success
-      : result?.score >= 50
-      ? Colors.warning
-      : Colors.error;
-
   return (
-    <View style={toolStyles.section}>
-      <Text style={toolStyles.toolTitle}>🎯 Match Score Analyzer</Text>
-      <Text style={toolStyles.toolSubtitle}>
-        AI evaluates how well you fit a role
-      </Text>
+    <Card variant="elevated" style={styles.toolCard}>
+      <Text style={styles.toolTitle}>Resume Match Score</Text>
+      <Text style={styles.toolDesc}>Paste a job description to see how well your profile matches.</Text>
+      <Input
+        placeholder="Paste job description..."
+        value={desc}
+        onChangeText={setDesc}
+        multiline
+        style={{ minHeight: 120, textAlignVertical: "top" }}
+        containerStyle={{ marginBottom: Spacing.xl }}
+      />
+      <Button variant="primary" loading={loading} onPress={handleScore} disabled={loading}>
+        Calculate Score
+      </Button>
 
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Company</Text>
-        <TextInput style={toolStyles.input} value={company} onChangeText={setCompany}
-          placeholder="e.g. Google" placeholderTextColor={Colors.textMuted} />
-      </View>
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Role</Text>
-        <TextInput style={toolStyles.input} value={role} onChangeText={setRole}
-          placeholder="e.g. Backend Engineer" placeholderTextColor={Colors.textMuted} />
-      </View>
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Job Skills (comma-separated)</Text>
-        <TextInput style={toolStyles.input} value={skills} onChangeText={setSkills}
-          placeholder="React, Node.js, PostgreSQL" placeholderTextColor={Colors.textMuted} />
-      </View>
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Your Skills (comma-separated)</Text>
-        <TextInput style={toolStyles.input} value={userSkills} onChangeText={setUserSkills}
-          placeholder="React, Next.js, TypeScript" placeholderTextColor={Colors.textMuted} />
-      </View>
-
-      <TouchableOpacity
-        style={[toolStyles.generateBtn, loading && toolStyles.generateBtnDisabled]}
-        onPress={handleAnalyze}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={toolStyles.generateBtnText}>🎯 Analyze Match</Text>
-        )}
-      </TouchableOpacity>
-
+      {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
       {result && (
-        <View style={toolStyles.outputBox}>
-          {/* Score */}
-          <View style={toolStyles.scoreRow}>
-            <View style={[toolStyles.scoreBadge, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "50" }]}>
-              <Text style={[toolStyles.scoreValue, { color: scoreColor }]}>
-                {result.score}
-              </Text>
-              <Text style={[toolStyles.scoreGrade, { color: scoreColor }]}>
-                {result.grade}
-              </Text>
+        <View style={styles.resultBox}>
+          <View style={styles.scoreRow}>
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreValue}>{result.score ?? "?"}</Text>
             </View>
-            <Text style={toolStyles.summary}>{result.summary}</Text>
+            <Text style={styles.summaryText}>{result.summary}</Text>
           </View>
-
-          {/* Matched */}
-          {result.matched?.length > 0 && (
-            <View style={toolStyles.resultSection}>
-              <Text style={[toolStyles.resultHeader, { color: Colors.success }]}>
-                ✅ Matched Skills
-              </Text>
-              {result.matched.map((m: any, i: number) => (
-                <Text key={i} style={toolStyles.resultItem}>
-                  • {m.skill}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          {/* Missing */}
           {result.missing?.length > 0 && (
-            <View style={toolStyles.resultSection}>
-              <Text style={[toolStyles.resultHeader, { color: Colors.error }]}>
-                ❌ Missing Skills
-              </Text>
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.missingTitle}>Missing Skills:</Text>
               {result.missing.map((m: any, i: number) => (
-                <Text key={i} style={toolStyles.resultItem}>
-                  • {m.skill} ({m.importance}, ~{m.learnTime})
-                </Text>
-              ))}
-            </View>
-          )}
-
-          {/* Suggestions */}
-          {result.suggestions?.length > 0 && (
-            <View style={toolStyles.resultSection}>
-              <Text style={[toolStyles.resultHeader, { color: Colors.primary }]}>
-                💡 Suggestions
-              </Text>
-              {result.suggestions.map((s: any, i: number) => (
-                <Text key={i} style={toolStyles.resultItem}>
-                  • {s.action}
-                </Text>
+                <Text key={i} style={styles.missingItem}>• {m.skill} (~{m.learnTime})</Text>
               ))}
             </View>
           )}
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 // ─── Learning Plan Tool ───────────────────────────────────────────────────────
 function LearningPlanTool() {
-  const [skillsInput, setSkillsInput] = useState("");
+  const [skills, setSkills] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
-    const skills = skillsInput
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (skills.length === 0) {
-      Alert.alert("Required", "Enter at least one skill to learn.");
-      return;
-    }
+    if (!skills.trim()) return;
     setOutput("");
     setLoading(true);
 
+    const missingSkills = skills.split(",").map((s) => ({
+      skill: s.trim(),
+      importance: "must-have",
+      learnTime: "2-4 weeks",
+    })).filter(s => s.skill);
+
     await streamFetch(
       API_ENDPOINTS.AI_LEARNING_PLAN,
-      {
-        missingSkills: skills.map((s) => ({
-          skill: s,
-          importance: "must-have",
-          learnTime: "2-4 weeks",
-        })),
-      },
+      { missingSkills },
       (chunk) => setOutput((prev) => prev + chunk),
       () => setLoading(false),
       (err) => {
@@ -390,172 +222,150 @@ function LearningPlanTool() {
   };
 
   return (
-    <View style={toolStyles.section}>
-      <Text style={toolStyles.toolTitle}>📚 Learning Plan Generator</Text>
-      <Text style={toolStyles.toolSubtitle}>
-        Get a personalized roadmap to upskill
-      </Text>
-
-      <View style={toolStyles.fieldGroup}>
-        <Text style={toolStyles.label}>Skills to Learn (comma-separated)</Text>
-        <TextInput
-          style={[toolStyles.input, toolStyles.textarea]}
-          value={skillsInput}
-          onChangeText={setSkillsInput}
-          placeholder="Docker, Kubernetes, Redis, GraphQL"
-          placeholderTextColor={Colors.textMuted}
-          multiline
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[toolStyles.generateBtn, loading && toolStyles.generateBtnDisabled]}
-        onPress={handleGenerate}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={toolStyles.generateBtnText}>📚 Generate Plan</Text>
-        )}
-      </TouchableOpacity>
+    <Card variant="elevated" style={styles.toolCard}>
+      <Text style={styles.toolTitle}>Learning Plan</Text>
+      <Text style={styles.toolDesc}>Generate a customized learning roadmap for skills you're missing.</Text>
+      <Input
+        placeholder="e.g. Docker, GraphQL, Redis"
+        value={skills}
+        onChangeText={setSkills}
+        containerStyle={{ marginBottom: Spacing.xl }}
+      />
+      <Button variant="primary" loading={loading} onPress={handleGenerate} disabled={loading}>
+        Build Roadmap
+      </Button>
 
       {output !== "" && (
-        <View style={toolStyles.outputBox}>
-          <Text style={toolStyles.outputLabel}>Learning Roadmap</Text>
-          <Text style={toolStyles.outputText}>{output}</Text>
-          {loading && <Text style={toolStyles.streamingIndicator}>▋ Generating...</Text>}
+        <View style={styles.outputBox}>
+          <Text style={styles.outputText}>{output}</Text>
+          {loading && <Text style={styles.streamingIndicator}>▋</Text>}
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  pageHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
-    gap: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  backBtn: { padding: 4 },
-  backBtnText: { color: Colors.primary, fontSize: FontSize.md },
-  pageTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.text },
-  tabScroll: { flexGrow: 0, marginBottom: Spacing.sm },
-  tabContent: {
-    paddingHorizontal: Spacing.lg,
+  backBtn: {
+    padding: Spacing.sm,
+    marginRight: Spacing.sm,
+  },
+  title: {
+    ...Type.h2,
+  },
+  tabContainer: {
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tabScroll: {
+    paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
   },
-  tab: {
-    paddingHorizontal: Spacing.md,
+  tabBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.bgCard,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: "center",
-    marginRight: Spacing.sm,
-    minWidth: 80,
   },
-  tabActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
-  tabEmoji: { fontSize: 18 },
-  tabLabel: { color: Colors.textSecondary, fontSize: FontSize.xs, marginTop: 2, fontWeight: FontWeight.medium },
-  tabLabelActive: { color: Colors.primaryLight },
-  toolArea: { flex: 1 },
-});
-
-const toolStyles = StyleSheet.create({
-  section: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
-  toolTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
+  tabBtnActive: {
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  tabText: {
+    ...Type.bodyMed,
+    color: Colors.textMuted,
+  },
+  tabTextActive: {
     color: Colors.text,
+  },
+  content: {
+    padding: Spacing.lg,
+    paddingBottom: 120,
+  },
+  toolCard: {
+    padding: Spacing.lg,
+  },
+  toolTitle: {
+    ...Type.h2,
     marginBottom: 4,
   },
-  toolSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+  toolDesc: {
+    ...Type.body,
+    color: Colors.textMuted,
+    marginBottom: Spacing.xl,
   },
-  fieldGroup: { marginBottom: Spacing.md },
-  label: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium, marginBottom: 6 },
-  input: {
-    backgroundColor: Colors.bgInput,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 13,
-    color: Colors.text,
-    fontSize: FontSize.sm,
-  },
-  textarea: { minHeight: 70, textAlignVertical: "top" },
-  chipRow: { flexDirection: "row", gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.bgInput,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
-  chipText: { color: Colors.textSecondary, fontSize: FontSize.xs },
-  chipTextActive: { color: Colors.primaryLight, fontWeight: FontWeight.semibold },
-  generateBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 15,
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  generateBtnDisabled: { opacity: 0.7 },
-  generateBtnText: { color: "#fff", fontSize: FontSize.md, fontWeight: FontWeight.semibold },
   outputBox: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.xl,
     padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderLeftWidth: 3,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
   },
-  outputLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
   outputText: {
+    ...Type.bodyMed,
     color: Colors.text,
-    fontSize: FontSize.sm,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   streamingIndicator: {
     color: Colors.primary,
-    fontSize: FontSize.md,
     marginTop: 4,
   },
-  // Match Score
-  scoreRow: { flexDirection: "row", gap: Spacing.md, alignItems: "flex-start", marginBottom: Spacing.md },
-  scoreBadge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
+  resultBox: {
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
   },
-  scoreValue: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold },
-  scoreGrade: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, textAlign: "center" },
-  summary: { flex: 1, color: Colors.textSecondary, fontSize: FontSize.sm, lineHeight: 20 },
-  resultSection: { marginTop: Spacing.sm },
-  resultHeader: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, marginBottom: 6 },
-  resultItem: { color: Colors.textSecondary, fontSize: FontSize.sm, lineHeight: 20, marginBottom: 4 },
+  scoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  scoreBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scoreValue: {
+    ...Type.h2,
+    color: Colors.primaryLight,
+  },
+  summaryText: {
+    flex: 1,
+    ...Type.body,
+    color: Colors.textMuted,
+  },
+  missingTitle: {
+    ...Type.micro,
+    color: Colors.error,
+    marginBottom: 8,
+  },
+  missingItem: {
+    ...Type.caption,
+    color: Colors.text,
+    marginBottom: 4,
+  },
 });

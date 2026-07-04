@@ -3,346 +3,311 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TextInput,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import apiClient from "@/services/api";
+import apiClient, { streamFetch } from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  FontSize,
-  FontWeight,
-} from "@/constants/theme";
+import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
+import { Button, Input, Card } from "@/components/ui";
+import { ArrowLeft, Link as LinkIcon, AlignLeft } from "lucide-react-native";
 
-type Mode = "url" | "text";
-
-export default function ImportScreen() {
+export default function ImportJobScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("text");
-  const [inputText, setInputText] = useState("");
+  
+  const [tab, setTab] = useState<"URL" | "TEXT">("URL");
+  const [url, setUrl] = useState("");
+  const [text, setText] = useState("");
+  
   const [loading, setLoading] = useState(false);
+  const [rawOutput, setRawOutput] = useState("");
   const [parsed, setParsed] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   const handleImport = async () => {
-    if (!inputText.trim()) {
-      Alert.alert("Required", `Please enter a job ${mode === "url" ? "URL" : "description"}.`);
+    if (tab === "URL" && !url.trim()) {
+      Alert.alert("Required", "Please paste a job posting URL.");
       return;
     }
+    if (tab === "TEXT" && !text.trim()) {
+      Alert.alert("Required", "Please paste the job description text.");
+      return;
+    }
+
     setLoading(true);
     setParsed(null);
+    setRawOutput("");
 
-    try {
-      // Collect streaming response and parse JSON from it
-      let fullText = "";
-      let aiSection = "";
-      const endpoint = mode === "url" ? API_ENDPOINTS.IMPORT_URL : API_ENDPOINTS.IMPORT_TEXT;
-      const body = mode === "url" ? { url: inputText.trim() } : { text: inputText.trim() };
+    let buffer = "";
+    
+    // Determine the correct endpoint and payload based on mode
+    const endpoint = tab === "URL" ? `${API_ENDPOINTS.JOBS_IMPORT}/url` : `${API_ENDPOINTS.JOBS_IMPORT}/text`;
+    const payload = tab === "URL" ? { url: url.trim() } : { text: text.trim() };
 
-      const { getToken } = await import("@/services/api");
-      const token = await getToken();
-      const res = await fetch(`${(await import("@/constants/api")).API_BASE_URL}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
+    await streamFetch(
+      endpoint,
+      payload,
+      (chunk) => {
+        buffer += chunk;
+        setRawOutput(buffer);
+      },
+      () => {
+        setLoading(false);
+        try {
+          // The stream sends raw JSON payload followed by "\n__AI_START__\n" and then the AI response
+          const parts = buffer.split("__AI_START__");
+          const aiResponse = parts.length > 1 ? parts[1].trim() : parts[0].trim();
+          
+          // Groq sometimes wraps json in ```json ... ```
+          let cleanJson = aiResponse;
+          if (cleanJson.includes("```json")) {
+            cleanJson = cleanJson.split("```json")[1].split("```")[0];
+          } else if (cleanJson.includes("```")) {
+            cleanJson = cleanJson.split("```")[1].split("```")[0];
+          }
+          
+          const result = JSON.parse(cleanJson);
+          setParsed(result);
+        } catch (err) {
+          Alert.alert("Parsing Error", "Failed to parse AI output. The format might be invalid.");
+          console.log(buffer);
+        }
+      },
+      (errorMsg) => {
+        setLoading(false);
+        Alert.alert("Import Failed", errorMsg);
       }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No stream");
-
-      const decoder = new TextDecoder();
-      let done = false;
-      while (!done) {
-        const { value, done: d } = await reader.read();
-        done = d;
-        if (value) fullText += decoder.decode(value, { stream: true });
-      }
-
-      // Split at __AI_START__ separator
-      const parts = fullText.split("__AI_START__");
-      if (parts.length >= 2) {
-        aiSection = parts[1].trim();
-      } else {
-        aiSection = fullText.trim();
-      }
-
-      // Parse JSON from AI section
-      const jsonMatch = aiSection.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setParsed(parsed);
-      } else {
-        throw new Error("Could not parse AI response");
-      }
-    } catch (err: any) {
-      Alert.alert("Import Failed", err.message || "Failed to parse job description.");
-    } finally {
-      setLoading(false);
-    }
+    );
   };
 
   const handleSaveJob = async () => {
     if (!parsed) return;
     setSaving(true);
     try {
-      const payload: Record<string, any> = {
-        title: parsed.role || "Untitled Role",
+      const payload = {
+        title: parsed.role || "Unknown Role",
         company: parsed.company || "Unknown Company",
-        location: parsed.location || undefined,
-        employmentType: mapType(parsed.type),
-        salary: parsed.salary || undefined,
-        url: parsed.link || undefined,
-        status: "SAVED",
-        priority: "MEDIUM",
+        location: parsed.location || "",
+        employmentType: parsed.type || "Full-time",
+        description: parsed.description || "",
+        sourceUrl: tab === "URL" ? url : parsed.link || "",
         skills: parsed.skills || [],
-        notes: parsed.description || undefined,
+        salary: parsed.salary || "",
+        status: "SAVED",
       };
-      if (parsed.deadline) {
-        try {
-          payload.deadline = new Date(parsed.deadline).toISOString();
-        } catch {}
-      }
-      await apiClient.post(API_ENDPOINTS.OPPORTUNITIES, payload);
-      Alert.alert("✅ Saved", "Job added to your tracker!", [
-        { text: "View Jobs", onPress: () => router.push("/(app)/opportunities") },
-        { text: "Import Another", onPress: () => { setParsed(null); setInputText(""); } },
-      ]);
+      await apiClient.post(API_ENDPOINTS.JOBS, payload);
+      router.replace("/(app)/");
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.error || "Failed to save job.");
+      Alert.alert("Save Error", err?.response?.data?.error || "Could not save the job.");
     } finally {
       setSaving(false);
     }
   };
 
-  function mapType(t: string): string {
-    const lower = (t || "").toLowerCase();
-    if (lower.includes("intern")) return "INTERNSHIP";
-    if (lower.includes("full")) return "FULL_TIME";
-    if (lower.includes("part")) return "PART_TIME";
-    if (lower.includes("contract")) return "CONTRACT";
-    return "FULL_TIME";
-  }
-
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Colors.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.pageHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>‹ Back</Text>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Add Job</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabBtn, tab === "URL" && styles.tabBtnActive]}
+            onPress={() => { setTab("URL"); setParsed(null); }}
+          >
+            <LinkIcon size={16} color={tab === "URL" ? Colors.text : Colors.textMuted} />
+            <Text style={[styles.tabText, tab === "URL" && styles.tabTextActive]}>From URL</Text>
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Import Job</Text>
+          <TouchableOpacity
+            style={[styles.tabBtn, tab === "TEXT" && styles.tabBtnActive]}
+            onPress={() => { setTab("TEXT"); setParsed(null); }}
+          >
+            <AlignLeft size={16} color={tab === "TEXT" ? Colors.text : Colors.textMuted} />
+            <Text style={[styles.tabText, tab === "TEXT" && styles.tabTextActive]}>Paste Text</Text>
+          </TouchableOpacity>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Mode Tabs */}
-          <View style={styles.tabsRow}>
-            {(["text", "url"] as Mode[]).map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.tab, mode === m && styles.tabActive]}
-                onPress={() => { setMode(m); setParsed(null); setInputText(""); }}
-              >
-                <Text style={[styles.tabText, mode === m && styles.tabTextActive]}>
-                  {m === "text" ? "📝 Paste Text" : "🔗 From URL"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Form Area */}
+        <Card variant="elevated" style={styles.formCard}>
+          <Text style={styles.formInstructions}>
+            {tab === "URL" 
+              ? "Paste the link to the job posting. Our AI will automatically extract the role, company, and requirements."
+              : "Paste the full text of the job description. We'll analyze it and extract structured data."}
+          </Text>
 
-          {/* Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>
-              {mode === "text"
-                ? "Paste the full job description below"
-                : "Enter the job listing URL"}
-            </Text>
-            <TextInput
-              style={[styles.input, mode === "text" && styles.textarea]}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder={
-                mode === "text"
-                  ? "Paste job description here...\n\nAt least 50 characters needed for AI to extract info."
-                  : "https://linkedin.com/jobs/view/..."
-              }
-              placeholderTextColor={Colors.textMuted}
-              multiline={mode === "text"}
-              numberOfLines={mode === "text" ? 8 : 1}
-              keyboardType={mode === "url" ? "url" : "default"}
+          {tab === "URL" ? (
+            <Input
+              placeholder="https://linkedin.com/jobs/view/..."
+              value={url}
+              onChangeText={setUrl}
+              keyboardType="url"
               autoCapitalize="none"
+              autoCorrect={false}
+              containerStyle={{ marginBottom: Spacing.xl }}
             />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.importBtn, loading && styles.importBtnDisabled]}
-            onPress={handleImport}
-            disabled={loading}
-          >
-            {loading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#fff" size="small" />
-                <Text style={styles.importBtnText}>AI Parsing...</Text>
-              </View>
-            ) : (
-              <Text style={styles.importBtnText}>✨ Extract Job Details</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Parsed Result */}
-          {parsed && (
-            <View style={styles.resultCard}>
-              <View style={styles.resultHeader}>
-                <Text style={styles.resultTitle}>Extracted Job Info</Text>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>
-                    {parsed.confidence ?? "?"}% match
-                  </Text>
-                </View>
-              </View>
-
-              {[
-                { label: "Role", value: parsed.role },
-                { label: "Company", value: parsed.company },
-                { label: "Location", value: parsed.location },
-                { label: "Type", value: parsed.type },
-                { label: "Salary", value: parsed.salary },
-                { label: "Deadline", value: parsed.deadline },
-              ]
-                .filter((f) => f.value)
-                .map((f) => (
-                  <View key={f.label} style={styles.resultRow}>
-                    <Text style={styles.resultLabel}>{f.label}</Text>
-                    <Text style={styles.resultValue}>{f.value}</Text>
-                  </View>
-                ))}
-
-              {parsed.skills?.length > 0 && (
-                <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>Skills</Text>
-                  <View style={styles.skillsWrap}>
-                    {parsed.skills.map((s: string) => (
-                      <View key={s} style={styles.skillChip}>
-                        <Text style={styles.skillText}>{s}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {parsed.description && (
-                <View style={styles.descBox}>
-                  <Text style={styles.descText}>{parsed.description}</Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.saveBtn, saving && styles.importBtnDisabled]}
-                onPress={handleSaveJob}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.saveBtnText}>💾 Add to Job Tracker</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+          ) : (
+            <Input
+              placeholder="Paste job description here...\n\nAt least 50 characters needed."
+              value={text}
+              onChangeText={setText}
+              multiline
+              style={{ minHeight: 160, textAlignVertical: "top" }}
+              containerStyle={{ marginBottom: Spacing.xl }}
+            />
           )}
 
-          <View style={{ height: Spacing.xxl }} />
-        </ScrollView>
-      </View>
+          <Button variant="primary" loading={loading} onPress={handleImport} disabled={loading || saving}>
+            {tab === "URL" ? "Extract from URL" : "Analyze Text"}
+          </Button>
+        </Card>
+
+        {loading && !parsed && (
+          <View style={styles.streamingBox}>
+            <Text style={styles.streamingLabel}>AI is analyzing...</Text>
+          </View>
+        )}
+
+        {/* Review Parsed Result */}
+        {parsed && !loading && (
+          <Card variant="elevated" style={styles.resultCard}>
+            <View style={styles.resultHeader}>
+              <Text style={styles.resultTitle}>Extracted Job Info</Text>
+              <View style={styles.confidenceBadge}>
+                <Text style={styles.confidenceText}>{parsed.confidence ?? "?"}% Match</Text>
+              </View>
+            </View>
+
+            {[
+              { label: "Role", value: parsed.role },
+              { label: "Company", value: parsed.company },
+              { label: "Location", value: parsed.location },
+              { label: "Type", value: parsed.type },
+              { label: "Salary", value: parsed.salary },
+              { label: "Deadline", value: parsed.deadline },
+            ].filter(f => f.value).map((f) => (
+              <View key={f.label} style={styles.resultRow}>
+                <Text style={styles.resultLabel}>{f.label}</Text>
+                <Text style={styles.resultValue}>{f.value}</Text>
+              </View>
+            ))}
+
+            {parsed.skills && parsed.skills.length > 0 && (
+              <View style={styles.resultRow}>
+                <Text style={styles.resultLabel}>Skills</Text>
+                <View style={styles.skillsWrap}>
+                  {parsed.skills.map((s: string) => (
+                    <View key={s} style={styles.skillChip}>
+                      <Text style={styles.skillText}>{s}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {parsed.description && (
+              <View style={styles.descBox}>
+                <Text style={styles.descText}>{parsed.description}</Text>
+              </View>
+            )}
+
+            <Button variant="secondary" loading={saving} onPress={handleSaveJob} style={{ marginTop: 12 }}>
+              Save to Tracker
+            </Button>
+          </Card>
+        )}
+
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  pageHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.md,
-  },
-  backBtn: { padding: 4 },
-  backBtnText: { color: Colors.primary, fontSize: FontSize.md },
-  pageTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.text },
-  tabsRow: {
-    flexDirection: "row",
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.md,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: BorderRadius.sm },
-  tabActive: { backgroundColor: Colors.primary },
-  tabText: { color: Colors.textSecondary, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
-  tabTextActive: { color: "#fff", fontWeight: FontWeight.semibold },
-  inputSection: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
-  inputLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: Colors.bgInput,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 13,
-    color: Colors.text,
-    fontSize: FontSize.sm,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  textarea: { minHeight: 160, textAlignVertical: "top" },
-  importBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 15,
-    alignItems: "center",
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
+  backBtn: {
+    padding: Spacing.sm,
+    marginRight: Spacing.sm,
   },
-  importBtnDisabled: { opacity: 0.7 },
-  importBtnText: { color: "#fff", fontSize: FontSize.md, fontWeight: FontWeight.semibold },
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  // Result card
-  resultCard: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginHorizontal: Spacing.lg,
+  title: {
+    ...Type.h2,
+  },
+  content: {
+    padding: Spacing.lg,
+    paddingBottom: 120,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.full,
+    padding: 4,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderTopWidth: 3,
-    borderTopColor: Colors.primary,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  tabText: {
+    ...Type.bodyMed,
+    color: Colors.textMuted,
+  },
+  tabTextActive: {
+    color: Colors.text,
+  },
+  formCard: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  formInstructions: {
+    ...Type.body,
+    color: Colors.textMuted,
+    marginBottom: Spacing.xl,
+    lineHeight: 22,
+  },
+  streamingBox: {
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  streamingLabel: {
+    ...Type.bodyMed,
+    color: Colors.primaryLight,
+  },
+  resultCard: {
+    padding: Spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
   },
   resultHeader: {
     flexDirection: "row",
@@ -351,50 +316,56 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   resultTitle: {
-    color: Colors.text,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
+    ...Type.h2,
   },
   confidenceBadge: {
-    backgroundColor: Colors.successMuted,
+    backgroundColor: Colors.primaryMuted,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.pill,
   },
-  confidenceText: { color: Colors.success, fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+  confidenceText: {
+    ...Type.micro,
+    color: Colors.primaryLight,
+  },
   resultRow: {
-    marginBottom: 10,
-    gap: 4,
+    marginBottom: Spacing.sm,
   },
   resultLabel: {
+    ...Type.micro,
     color: Colors.textMuted,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  resultValue: { color: Colors.text, fontSize: FontSize.sm },
-  skillsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  resultValue: {
+    ...Type.bodyMed,
+  },
+  skillsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
   skillChip: {
-    backgroundColor: Colors.primaryMuted,
+    backgroundColor: Colors.surfaceHighlight,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  skillText: { color: Colors.primaryLight, fontSize: FontSize.xs },
+  skillText: {
+    ...Type.caption,
+  },
   descBox: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  descText: { color: Colors.textSecondary, fontSize: FontSize.xs, lineHeight: 16 },
-  saveBtn: {
-    backgroundColor: Colors.success,
+    backgroundColor: Colors.surfaceHighlight,
+    padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    paddingVertical: 14,
-    alignItems: "center",
     marginTop: Spacing.sm,
   },
-  saveBtnText: { color: "#fff", fontSize: FontSize.md, fontWeight: FontWeight.semibold },
+  descText: {
+    ...Type.body,
+    color: Colors.textMuted,
+    lineHeight: 20,
+  },
 });

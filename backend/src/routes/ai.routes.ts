@@ -54,6 +54,32 @@ Format:
 </COVER>`;
 }
 
+// POST /api/ai/generate
+router.post("/generate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({
+        error: "GROQ_API_KEY not configured. Add your key from https://console.groq.com/keys",
+      });
+    }
+
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    // Force it to return a JSON object with 'result' containing the generated text
+    const fullPrompt = `${prompt}\n\nRespond ONLY with a JSON object in this format: { "result": "your full response here" }`;
+    const response = await extractJSON<{ result: string }>(fullPrompt);
+
+    return res.json({ result: response.result });
+  } catch (error) {
+    console.error("[POST /api/ai/generate]", error);
+    const msg = formatGeminiError(error);
+    return res.status(500).json({ error: msg });
+  }
+});
+
 // POST /api/ai/generate-email
 router.post("/generate-email", requireAuth, async (req: Request, res: Response) => {
   try {

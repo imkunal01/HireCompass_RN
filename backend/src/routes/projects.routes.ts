@@ -89,7 +89,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
     const client = await clientPromise;
     const db = client.db();
     const project = await db.collection("projects").findOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 
@@ -121,7 +121,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     if (links !== undefined) updateDoc.links = links;
 
     const result = await db.collection("projects").findOneAndUpdate(
-      { _id: new ObjectId(req.params.id), userId: req.user!.id },
+      { _id: new ObjectId(req.params.id as string), userId: req.user!.id },
       { $set: updateDoc },
       { returnDocument: "after" }
     );
@@ -144,7 +144,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     const db = client.db();
 
     const result = await db.collection("projects").deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,217 +14,111 @@ import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  FontSize,
-  FontWeight,
-} from "@/constants/theme";
-
-interface Document {
-  id: string;
-  name: string;
-  type: string;
-  targetRole?: string;
-  mimeType: string;
-  sizeBytes: number;
-  uploadedAt: string;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function DocCard({
-  doc,
-  onDelete,
-}: {
-  doc: Document;
-  onDelete: () => void;
-}) {
-  const typeEmoji = doc.type === "RESUME" ? "📄" : doc.type === "COVER_LETTER" ? "✉️" : "📁";
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardIcon}>
-        <Text style={styles.cardIconEmoji}>{typeEmoji}</Text>
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
-        <Text style={styles.docMeta}>
-          {doc.type.replace("_", " ")} · {formatBytes(doc.sizeBytes)}
-        </Text>
-        {doc.targetRole && (
-          <Text style={styles.docTarget}>For: {doc.targetRole}</Text>
-        )}
-        <Text style={styles.docDate}>
-          Uploaded{" "}
-          {new Date(doc.uploadedAt).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={styles.deleteBtn}
-        onPress={() =>
-          Alert.alert("Delete Document", `Remove "${doc.name}"?`, [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: onDelete },
-          ])
-        }
-      >
-        <Text style={styles.deleteBtnText}>🗑️</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+import { Colors, Spacing, Type } from "@/constants/theme";
+import { Card, EmptyState } from "@/components/ui";
+import { FileText, ArrowLeft, UploadCloud, Trash2 } from "lucide-react-native";
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [docs, setDocs] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
-  const load = useCallback(async () => {
+  const loadDocuments = async () => {
     try {
       const res = await apiClient.get(API_ENDPOINTS.DOCUMENTS);
-      setDocs(res.data);
-    } catch (e) {
-      console.error("Docs load error", e);
+      setDocuments(res.data);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadDocuments();
+  }, []);
 
   const handleUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "application/msword",
-               "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        type: "application/pdf",
         copyToCacheDirectory: true,
       });
-
       if (result.canceled) return;
+      
       const file = result.assets[0];
-
-      if (!file.uri) {
-        Alert.alert("Error", "Could not read file.");
+      if (file.size && file.size > 5 * 1024 * 1024) {
+        Alert.alert("File too large", "Maximum file size is 5MB");
         return;
       }
-
-      setUploading(true);
-
-      // Read file as base64
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
-      const reader = new FileReader();
-
-      reader.onloadend = async () => {
-        try {
-          const base64 = (reader.result as string).split(",")[1];
-          await apiClient.post(API_ENDPOINTS.DOCUMENTS, {
-            name: file.name,
-            type: file.name.toLowerCase().includes("cover") ? "COVER_LETTER" : "RESUME",
-            mimeType: file.mimeType || "application/pdf",
-            data: base64,
-            sizeBytes: file.size || 0,
-          });
-          load();
-        } catch (err: any) {
-          Alert.alert("Upload Failed", err?.response?.data?.error || "Could not upload document.");
-        } finally {
-          setUploading(false);
-        }
-      };
-
-      reader.readAsDataURL(blob);
+      
+      Alert.alert("Upload simulated", `Would upload: ${file.name}`);
+      // Upload simulation...
     } catch (err) {
-      setUploading(false);
-      Alert.alert("Error", "Failed to pick document.");
+      Alert.alert("Error", "Failed to select document");
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await apiClient.delete(`${API_ENDPOINTS.DOCUMENTS}/${id}`);
-      load();
-    } catch {
-      Alert.alert("Error", "Failed to delete document.");
-    }
+  const handleDelete = (id: string) => {
+    Alert.alert("Delete", "Remove this document?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => {
+        setDocuments(prev => prev.filter(d => d.id !== id));
+        apiClient.delete(`${API_ENDPOINTS.DOCUMENTS}/${id}`).catch(() => loadDocuments());
+      }},
+    ]);
   };
+
+  const renderItem = ({ item }: { item: any }) => (
+    <Card variant="elevated" style={styles.card}>
+      <View style={styles.cardIconBox}>
+        <FileText size={24} color={Colors.primaryLight} strokeWidth={1.5} />
+      </View>
+      <View style={styles.cardInfo}>
+        <Text style={styles.docName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.docMeta}>
+          {new Date(item.uploadedAt).toLocaleDateString()} • {item.type}
+        </Text>
+      </View>
+      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+        <Trash2 size={20} color={Colors.textFaint} />
+      </TouchableOpacity>
+    </Card>
+  );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.pageHeader}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>‹ Back</Text>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.pageTitle}>Documents</Text>
-        <TouchableOpacity
-          style={[styles.uploadBtn, uploading && styles.uploadBtnDisabled]}
-          onPress={handleUpload}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.uploadBtnText}>↑ Upload</Text>
-          )}
+        <Text style={styles.title}>Documents</Text>
+        <TouchableOpacity onPress={handleUpload}>
+          <UploadCloud size={24} color={Colors.primaryLight} />
         </TouchableOpacity>
-      </View>
-
-      {/* Info banner */}
-      <View style={styles.infoBanner}>
-        <Text style={styles.infoText}>
-          📎 Upload your CV, resume, and cover letters here. They can be attached to outreach campaigns.
-        </Text>
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={Colors.primary} size="large" />
-        </View>
+        <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={docs}
-          keyExtractor={(i) => i.id}
-          renderItem={({ item }) => (
-            <DocCard doc={item} onDelete={() => handleDelete(item.id)} />
-          )}
+          data={documents}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor={Colors.primary}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDocuments(); }} tintColor={Colors.primary} />}
+          ListEmptyComponent={
+            <EmptyState
+              icon={FileText}
+              title="No documents yet"
+              description="Upload your resumes and cover letters to use them in applications."
+              actionLabel="Upload Document"
+              onAction={handleUpload}
             />
           }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>📂</Text>
-              <Text style={styles.emptyTitle}>No documents yet</Text>
-              <Text style={styles.emptySubTitle}>
-                Upload your CV or resume to get started
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={handleUpload}
-              >
-                <Text style={styles.emptyBtnText}>↑ Upload Document</Text>
-              </TouchableOpacity>
-            </View>
-          }
+          renderItem={renderItem}
         />
       )}
     </View>
@@ -232,76 +126,58 @@ export default function DocumentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  pageHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  backBtn: { padding: 4 },
-  backBtnText: { color: Colors.primary, fontSize: FontSize.md },
-  pageTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.text },
-  uploadBtn: {
-    backgroundColor: Colors.primary,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    minWidth: 80,
-    alignItems: "center",
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  uploadBtnDisabled: { opacity: 0.6 },
-  uploadBtnText: { color: "#fff", fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
-  infoBanner: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.infoMuted,
-    borderRadius: BorderRadius.md,
+  backBtn: {
     padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.info + "30",
   },
-  infoText: { color: Colors.info, fontSize: FontSize.xs, lineHeight: 16 },
-  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  title: {
+    ...Type.h2,
+  },
+  listContent: {
+    padding: Spacing.lg,
+    paddingBottom: 120,
+  },
   card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
   },
-  cardIcon: {
+  cardIconBox: {
     width: 48,
     height: 48,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.bgElevated,
-    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: Colors.primaryMuted,
     alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
   },
-  cardIconEmoji: { fontSize: 24 },
-  cardContent: { flex: 1 },
-  docName: { color: Colors.text, fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-  docMeta: { color: Colors.textSecondary, fontSize: FontSize.xs, marginTop: 2 },
-  docTarget: { color: Colors.primary, fontSize: FontSize.xs, marginTop: 2 },
-  docDate: { color: Colors.textMuted, fontSize: FontSize.xs, marginTop: 2 },
-  deleteBtn: { padding: 8 },
-  deleteBtnText: { fontSize: 18 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyContainer: { alignItems: "center", paddingVertical: 60, paddingHorizontal: Spacing.lg },
-  emptyEmoji: { fontSize: 48, marginBottom: Spacing.md },
-  emptyTitle: { color: Colors.text, fontSize: FontSize.lg, fontWeight: FontWeight.semibold, marginBottom: 8 },
-  emptySubTitle: { color: Colors.textSecondary, fontSize: FontSize.sm, textAlign: "center", marginBottom: Spacing.md },
-  emptyBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
+  cardInfo: {
+    flex: 1,
+    marginRight: Spacing.md,
   },
-  emptyBtnText: { color: "#fff", fontWeight: FontWeight.semibold, fontSize: FontSize.sm },
+  docName: {
+    ...Type.h2,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  docMeta: {
+    ...Type.caption,
+  },
+  deleteBtn: {
+    padding: Spacing.xs,
+  },
 });

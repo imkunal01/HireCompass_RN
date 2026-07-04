@@ -189,7 +189,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = db.collection("opportunities");
 
     const opp = await col.findOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 
@@ -242,7 +242,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     const result = await col.findOneAndUpdate(
-      { _id: new ObjectId(req.params.id), userId: req.user!.id },
+      { _id: new ObjectId(req.params.id as string), userId: req.user!.id },
       updateDoc,
       { returnDocument: "after" }
     );
@@ -302,7 +302,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     const col = db.collection("opportunities");
 
     const result = await col.deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 

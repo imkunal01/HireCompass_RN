@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import clientPromise from "../config/db";
 import { ObjectId } from "mongodb";
 // @ts-ignore
-import pdfParse from "pdf-parse";
+const pdfParse = require("pdf-parse");
 
 const router = Router();
 

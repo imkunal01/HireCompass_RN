@@ -19,6 +19,37 @@ const transporter = nodemailer.createTransport({
 const FROM_EMAIL = process.env.GMAIL_USER || "";
 
 // ==========================================
+// NETWORK CONTACTS (For new Outreach UI)
+// ==========================================
+// GET /api/outreach
+router.get("/", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const client = await clientPromise;
+    // We treat outreach_records as the "Network Contacts" list
+    const records = await client.db().collection("outreach_records")
+      .find({ userId: req.user!.id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    const mapped = records.map(r => ({
+      id: r._id.toString(),
+      name: r.recruiterName || "Unknown",
+      role: r.recruiterRole || "Recruiter",
+      company: r.companyName || "Unknown",
+      platform: "linkedin", // Mocked or derived from context if needed
+      status: r.status || "PENDING",
+      addedAt: r.createdAt
+    }));
+
+    return res.json(mapped);
+  } catch (err) {
+    console.error("[GET /api/outreach]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ==========================================
 // CAMPAIGNS
 // ==========================================
 
@@ -375,7 +406,7 @@ router.patch("/records/:id", requireAuth, async (req: Request, res: Response) =>
 
     const client = await clientPromise;
     const result = await client.db().collection("outreach_records").updateOne(
-      { _id: new ObjectId(req.params.id), userId: req.user!.id },
+      { _id: new ObjectId(req.params.id as string), userId: req.user!.id },
       { $set: update }
     );
 
@@ -394,7 +425,7 @@ router.delete("/records/:id", requireAuth, async (req: Request, res: Response) =
   try {
     const client = await clientPromise;
     const result = await client.db().collection("outreach_records").deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(req.params.id as string),
       userId: req.user!.id,
     });
 
