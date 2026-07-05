@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Clipboard from "@react-native-clipboard/clipboard";
 import {
   View,
   Text,
@@ -112,6 +113,14 @@ function CoverLetterTool() {
           <Text style={styles.outputText}>{output}</Text>
           {loading && <Text style={styles.streamingIndicator}>▋</Text>}
         </View>
+      )}
+      {!loading && output !== "" && (
+        <Button variant="secondary" style={{ marginTop: 12 }} onPress={() => {
+          Clipboard.setString(output);
+          Alert.alert("Copied!", "Cover letter copied to clipboard.");
+        }}>
+          Copy to Clipboard
+        </Button>
       )}
     </Card>
   );
@@ -248,7 +257,7 @@ function LearningPlanTool() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "transparent",
   },
   header: {
     flexDirection: "row",

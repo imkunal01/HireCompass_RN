@@ -31,7 +31,8 @@ export default function ProjectsScreen() {
   });
 
   const renderItem = ({ item }: { item: any }) => (
-    <Card variant="elevated" style={styles.card}>
+    <TouchableOpacity activeOpacity={0.8} onPress={() => router.push(`/(app)/projects/${item.id}`)}>
+      <Card variant="elevated" style={styles.card}>
       <Text style={styles.projName}>{item.name}</Text>
       <Text style={styles.projDesc}>{item.description}</Text>
       
@@ -60,6 +61,7 @@ export default function ProjectsScreen() {
         )}
       </View>
     </Card>
+    </TouchableOpacity>
   );
 
   return (
@@ -98,7 +100,7 @@ export default function ProjectsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "transparent",
   },
   header: {
     flexDirection: "row",

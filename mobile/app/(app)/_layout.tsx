@@ -1,25 +1,25 @@
 import { Tabs, useRouter } from "expo-router";
 import { useEffect } from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet, Text, Platform } from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "@/store/authStore";
 import { getToken } from "@/services/api";
-import { Colors, Shadows } from "@/constants/theme";
+import { Colors, Shadows, Type } from "@/constants/theme";
 import {
-  LayoutDashboard,
+  Home,
+  Layers,
+  Send,
   Briefcase,
-  CalendarDays,
-  TrendingUp,
-  Grid,
+  MoreHorizontal,
 } from "lucide-react-native";
 
-// ── Custom Floating Pill Tab Bar ─────────────────────────────────────────────
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.tabBarContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-      <View style={styles.pill}>
+      <BlurView intensity={80} tint="light" style={styles.pill}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -36,15 +36,17 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             }
           };
 
-          // Map route names to Icons
-          let IconCmp = LayoutDashboard;
-          if (route.name === "opportunities") IconCmp = Briefcase;
-          if (route.name === "interviews") IconCmp = CalendarDays;
-          if (route.name === "analytics") IconCmp = TrendingUp;
-          if (route.name === "more") IconCmp = Grid;
+          // Map route names to Icons and labels
+          let IconCmp = Home;
+          let label = "Home";
+          if (route.name === "opportunities") { IconCmp = Layers; label = "Pipeline"; }
+          if (route.name === "outreach") { IconCmp = Send; label = "Outreach"; }
+          if (route.name === "projects") { IconCmp = Briefcase; label = "Projects"; }
+          if (route.name === "more") { IconCmp = MoreHorizontal; label = "More"; }
 
-          // Don't render hidden screens if any exist
-          if (["profile", "documents", "import", "outreach", "projects", "ai-tools", "reminders", "tracker"].includes(route.name)) return null;
+          // Only render the 5 main screens in the tab bar
+          const mainRoutes = ["index", "opportunities", "outreach", "projects", "more"];
+          if (!mainRoutes.includes(route.name)) return null;
 
           return (
             <TouchableOpacity
@@ -55,20 +57,28 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
               testID={options.tabBarTestID}
               onPress={onPress}
               activeOpacity={0.8}
-              style={[
-                styles.tabItem,
-                isFocused && styles.tabItemActive,
-              ]}
+              style={styles.tabItem}
             >
-              <IconCmp
-                size={22}
-                color={isFocused ? Colors.text : Colors.textFaint}
-                strokeWidth={isFocused ? 2.5 : 2}
-              />
+              <View style={styles.iconContainer}>
+                <IconCmp
+                  size={22}
+                  color={isFocused ? Colors.primary : Colors.textMuted}
+                  strokeWidth={isFocused ? 2.5 : 2}
+                />
+                {/* Optional notification badge for specific routes if needed */}
+                {route.name === "outreach" && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>3</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+                {label}
+              </Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </BlurView>
     </View>
   );
 }
@@ -97,13 +107,15 @@ export default function AppLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Dashboard" }} />
-      <Tabs.Screen name="opportunities" options={{ title: "Jobs" }} />
-      <Tabs.Screen name="interviews" options={{ title: "Interviews" }} />
-      <Tabs.Screen name="analytics" options={{ title: "Analytics" }} />
-      <Tabs.Screen name="more" options={{ title: "Menu" }} />
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="opportunities" />
+      <Tabs.Screen name="outreach" />
+      <Tabs.Screen name="projects" />
+      <Tabs.Screen name="more" />
       
-      {/* Exclude other screens from tabs if they accidentally get mapped here */}
+      {/* Hidden Screens */}
+      <Tabs.Screen name="interviews" options={{ href: null }} />
+      <Tabs.Screen name="analytics" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -119,24 +131,53 @@ const styles = StyleSheet.create({
   },
   pill: {
     flexDirection: "row",
-    backgroundColor: Colors.surfaceHighlight,
-    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.75)",
+    borderRadius: 40,
     paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingVertical: 16,
     alignItems: "center",
-    gap: 8,
-    ...Shadows.pill,
+    justifyContent: "space-between",
+    width: '92%',
+    maxWidth: 500,
+    overflow: "hidden",
+    ...Shadows.card,
   },
   tabItem: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+  },
+  iconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  tabLabel: {
+    ...Type.micro,
+    fontSize: 10,
+    marginTop: 6,
+    color: Colors.textMuted,
+  },
+  tabLabelActive: {
+    color: Colors.primary,
+    fontWeight: "700",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -10,
+    backgroundColor: "#EF4444",
+    borderRadius: 10,
+    width: 16,
+    height: 16,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.surface,
   },
-  tabItemActive: {
-    backgroundColor: Colors.primary,
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
   },
 });

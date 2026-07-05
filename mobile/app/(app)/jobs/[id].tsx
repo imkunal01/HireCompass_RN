@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
 import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
-import { ArrowLeft, Building2, MapPin, DollarSign, Calendar, ExternalLink } from "lucide-react-native";
+import { ArrowLeft, Building2, MapPin, DollarSign, Calendar, ExternalLink, Clock } from "lucide-react-native";
 import { Card, Button } from "@/components/ui";
 import { RouteTracker } from "@/components/ui/RouteTracker";
 
@@ -107,6 +107,36 @@ export default function JobDetailsScreen() {
             </Text>
           </View>
         </Card>
+
+        {/* Timeline History */}
+        {job.timeline && job.timeline.length > 0 && (
+          <Card variant="outline" style={styles.section}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: Spacing.md }}>
+              <Clock size={18} color={Colors.primaryLight} />
+              <Text style={styles.sectionTitle}>Timeline History</Text>
+            </View>
+            
+            <View style={styles.timelineContainer}>
+              {job.timeline.slice().reverse().map((event: any, idx: number, arr: any[]) => (
+                <View key={idx} style={styles.timelineRow}>
+                  <View style={styles.timelineLineContainer}>
+                    <View style={styles.timelineDot} />
+                    {idx < arr.length - 1 && <View style={styles.timelineLine} />}
+                  </View>
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineEvent}>{event.event}</Text>
+                    <Text style={styles.timelineDesc}>{event.description}</Text>
+                    <Text style={styles.timelineDate}>
+                      {new Date(event.timestamp).toLocaleString(undefined, {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                      })}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </Card>
+        )}
 
         {/* Actions */}
         {job.url && (
@@ -211,5 +241,46 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     marginTop: Spacing.md,
+  },
+  timelineContainer: {
+    paddingLeft: Spacing.xs,
+  },
+  timelineRow: {
+    flexDirection: "row",
+  },
+  timelineLineContainer: {
+    alignItems: "center",
+    marginRight: Spacing.md,
+  },
+  timelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primaryLight,
+    marginTop: 4,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 4,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: Spacing.lg,
+  },
+  timelineEvent: {
+    ...Type.bodyMed,
+    color: Colors.text,
+  },
+  timelineDesc: {
+    ...Type.body,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  timelineDate: {
+    ...Type.micro,
+    color: Colors.primaryLight,
+    marginTop: 4,
   },
 });

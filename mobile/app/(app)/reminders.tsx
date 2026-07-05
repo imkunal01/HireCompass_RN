@@ -231,7 +231,7 @@ export default function RemindersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "transparent",
   },
   header: {
     flexDirection: "row",
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.background,
+    backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: Colors.border,
   },

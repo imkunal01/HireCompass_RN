@@ -107,7 +107,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 // PATCH /api/projects/:id
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { name, description, techStack, roleCategories, metrics, links } = req.body;
+    const { name, description, techStack, roleCategories, metrics, links, snippets } = req.body;
 
     const client = await clientPromise;
     const db = client.db();
@@ -119,6 +119,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     if (roleCategories !== undefined) updateDoc.roleCategories = roleCategories;
     if (metrics !== undefined) updateDoc.metrics = metrics;
     if (links !== undefined) updateDoc.links = links;
+    if (snippets !== undefined) updateDoc.snippets = snippets;
 
     const result = await db.collection("projects").findOneAndUpdate(
       { _id: new ObjectId(req.params.id as string), userId: req.user!.id },

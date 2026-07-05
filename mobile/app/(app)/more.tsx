@@ -87,6 +87,7 @@ export default function MoreScreen() {
           <MenuItem icon={Bell} label="Reminders" onPress={() => router.push("/(app)/reminders")} />
           <MenuItem icon={FileText} label="Documents" onPress={() => router.push("/(app)/documents")} />
           <MenuItem icon={Download} label="Import Job" onPress={() => router.push("/(app)/import")} />
+          <MenuItem icon={Target} label="Form Kit (Matches & Snippets)" onPress={() => router.push("/(app)/form-kit")} />
           <MenuItem icon={Zap} label="AI Tools" onPress={() => router.push("/(app)/ai-tools")} />
           <MenuItem icon={Target} label="DSA & Goals Tracker" onPress={() => router.push("/(app)/tracker")} />
         </Card>
@@ -114,7 +115,7 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "transparent",
   },
   header: {
     paddingHorizontal: Spacing.lg,

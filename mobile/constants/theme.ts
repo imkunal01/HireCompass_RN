@@ -1,49 +1,55 @@
 import type { TextStyle, ViewStyle } from "react-native";
 
-// Design System — HireCompass Mobile V2
-// "Glass & Indigo" — Pure Dark Mode, Electric Indigo Accent, Sans-Serif only.
+// Design System — HireCompass Mobile V2 (Light Theme)
+// "Bright & Modern" — Clean Light Mode with Vibrant Accents, Sans-Serif only.
 
 export const Colors = {
   // ── Backgrounds ──────────────────────────────────────────────────────────
-  background: "#050505",    // Pure dark background
-  surface: "#121212",       // Elevated card/surface
-  surfaceHighlight: "#1C1C1C", // Slightly higher elevation (borders/hover states)
+  background: "#F8F9FA",    // Soft light background
+  surface: "#FFFFFF",       // Elevated card/surface (Pure White)
+  surfaceHighlight: "#F1F5F9", // Slightly darker for hover/borders
 
-  // ── Primary Accent — Electric Indigo ─────────────────────────────────────
-  primary: "#4F46E5",       // Core vibrant accent (Electric Indigo)
-  primaryMuted: "#4F46E520",// 12% opacity for pills/active backgrounds
-  primaryLight: "#818CF8",  // Lighter for dark mode visibility
+  // ── Primary Accent — Violet/Indigo ─────────────────────────────────────
+  primary: "#6B46FF",       // Vibrant Violet/Indigo for main brand elements
+  primaryMuted: "#6B46FF15",// Low opacity for pills/backgrounds
+  primaryLight: "#8B5CF6",  // Lighter variation
 
   // ── Typography ───────────────────────────────────────────────────────────
-  text: "#FFFFFF",          // Primary stark white text
-  textMuted: "#A1A1AA",     // Zinc-400 for secondary text
-  textFaint: "#71717A",     // Zinc-500 for micro text
+  text: "#1E293B",          // Slate 800 for primary text
+  textMuted: "#64748B",     // Slate 500 for secondary text
+  textFaint: "#94A3B8",     // Slate 400 for micro text
 
   // ── Structure & Status ───────────────────────────────────────────────────
-  border: "#27272A",        // Zinc-800 borders
+  border: "#E2E8F0",        // Slate 200 borders
   success: "#10B981",       // Emerald-500
   warning: "#F59E0B",       // Amber-500
   error: "#EF4444",         // Red-500
   
+  // Custom Accents for Dashboard
+  accentBlue: "#3B82F6",
+  accentOrange: "#F59E0B",
+  accentGreen: "#10B981",
+  accentPurple: "#8B5CF6",
+  
   // Legacy Aliases (temporarily mapped so screens don't crash while we migrate)
-  ink: "#050505",
-  inkRaised: "#121212",
-  inkOverlay: "#1C1C1C",
-  brass: "#4F46E5",
+  ink: "#1E293B",
+  inkRaised: "#334155",
+  inkOverlay: "#475569",
+  brass: "#6B46FF",
   parchment: "#FFFFFF",
-  parchmentDim: "#A1A1AA",
-  parchmentFaint: "#71717A",
-  hairline: "#27272A",
+  parchmentDim: "#F8F9FA",
+  parchmentFaint: "#F1F5F9",
+  hairline: "#E2E8F0",
   alarm: "#EF4444",
   caution: "#F59E0B",
   signal: "#10B981",
-  bg: "#050505",
-  bgCard: "#121212",
-  bgElevated: "#1C1C1C",
-  bgInput: "#1C1C1C",
-  textSecondary: "#A1A1AA",
-  borderLight: "#27272A",
-  primaryMutedLegacy: "#4F46E520",
+  bg: "#F8F9FA",
+  bgCard: "#FFFFFF",
+  bgElevated: "#F1F5F9",
+  bgInput: "#F1F5F9",
+  textSecondary: "#64748B",
+  borderLight: "#E2E8F0",
+  primaryMutedLegacy: "#6B46FF15",
 };
 
 export const Spacing = {
@@ -134,20 +140,27 @@ export const FontWeight = {
   extrabold: "800" as const,
 };
 
-// ── Shadows (Smooth, diffused modern SaaS shadows) ─────────────────────────
+// ── Shadows (Smooth, diffused modern SaaS shadows for light mode) ─────────────────────────
 export const Shadows = {
   glow: {
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 4,
   },
   pill: {
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  card: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 24,
+    elevation: 3,
   }
 };
