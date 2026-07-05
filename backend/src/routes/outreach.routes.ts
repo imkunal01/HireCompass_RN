@@ -799,4 +799,62 @@ router.get("/stats", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// DELETION ROUTES
+// ==========================================
+
+// DELETE /api/outreach/campaigns/:id
+router.delete("/campaigns/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const client = await clientPromise;
+    const db = client.db();
+    const campaignId = req.params.id;
+    const userId = req.user!.id;
+
+    const result = await db.collection("outreach_campaigns").deleteOne({
+      _id: new ObjectId(campaignId),
+      userId,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+
+    // Delete associated records
+    await db.collection("outreach_records").deleteMany({
+      campaignId,
+      userId,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[DELETE /api/outreach/campaigns/:id]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/outreach/records/:id
+router.delete("/records/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const client = await clientPromise;
+    const db = client.db();
+    const recordId = req.params.id;
+    const userId = req.user!.id;
+
+    const result = await db.collection("outreach_records").deleteOne({
+      _id: new ObjectId(recordId),
+      userId,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[DELETE /api/outreach/records/:id]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

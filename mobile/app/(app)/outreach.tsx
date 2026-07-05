@@ -39,6 +39,7 @@ import {
   Clock,
   Mail,
   UploadCloud,
+  Trash2,
 } from "lucide-react-native";
 import {
   BottomSheetModal,
@@ -98,6 +99,10 @@ export default function OutreachScreen() {
   const [draftEditMode, setDraftEditMode] = useState(false);
   const [editedDraft, setEditedDraft] = useState("");
   const [editedSubject, setEditedSubject] = useState("");
+
+  // Delete confirmation
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'CAMPAIGN' | 'RECORD', name: string } | null>(null);
 
   // ── Data queries ────────────────────────────────────────────────────────────
 
@@ -251,6 +256,30 @@ export default function OutreachScreen() {
       }
     },
     onError: (err: any) => Alert.alert("Error", err?.response?.data?.error || "Follow-up failed"),
+  });
+
+  const deleteCampaignMutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      const res = await apiClient.delete(`${API_ENDPOINTS.OUTREACH}/campaigns/${campaignId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["outreach_campaigns"] });
+      campaignSheetRef.current?.dismiss();
+      Alert.alert("Deleted", "Campaign has been deleted.");
+    },
+    onError: (err: any) => Alert.alert("Error", err?.response?.data?.error || "Failed to delete campaign"),
+  });
+
+  const deleteRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const res = await apiClient.delete(`${API_ENDPOINTS.OUTREACH}/records/${recordId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      loadCampaignRecords(selectedCampaign?.id);
+    },
+    onError: (err: any) => Alert.alert("Error", err?.response?.data?.error || "Failed to delete record"),
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -507,6 +536,15 @@ export default function OutreachScreen() {
               Follow Up
             </Button>
           )}
+          <TouchableOpacity
+            style={{ padding: 8, justifyContent: "center", alignItems: "center", backgroundColor: "#FEF2F2", borderRadius: BorderRadius.sm, marginLeft: 4 }}
+            onPress={() => {
+              setItemToDelete({ id: record.id, type: 'RECORD', name: record.name });
+              setDeleteConfirmVisible(true);
+            }}
+          >
+            <Trash2 size={16} color={Colors.error} />
+          </TouchableOpacity>
         </View>
       </Card>
     );
@@ -813,6 +851,43 @@ export default function OutreachScreen() {
         </View>
       </Modal>
 
+      {/* ── Delete Confirmation Modal ── */}
+      <Modal visible={deleteConfirmVisible} animationType="fade" transparent>
+        <View style={styles.modalBg}>
+          <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, Spacing.lg), padding: Spacing.lg }]}>
+            <Text style={{ ...Type.h2, marginBottom: Spacing.md }}>Confirm Deletion</Text>
+            <Text style={{ ...Type.body, color: Colors.textMuted, marginBottom: Spacing.xl }}>
+              Are you sure you want to delete {itemToDelete?.type === 'CAMPAIGN' ? 'the campaign' : 'the contact'} "{itemToDelete?.name}"? 
+              {itemToDelete?.type === 'CAMPAIGN' && " This will also remove all its contacts."}
+              {"\n\n"}This action cannot be undone.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: Spacing.md }}>
+              <Button 
+                variant="secondary" 
+                style={{ flex: 1 }} 
+                onPress={() => setDeleteConfirmVisible(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                style={{ flex: 1, backgroundColor: Colors.error }} 
+                onPress={() => {
+                  if (itemToDelete?.type === 'CAMPAIGN') {
+                    deleteCampaignMutation.mutate(itemToDelete.id);
+                  } else if (itemToDelete?.type === 'RECORD') {
+                    deleteRecordMutation.mutate(itemToDelete.id);
+                  }
+                  setDeleteConfirmVisible(false);
+                }}
+              >
+                Delete
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
 {/* ── Campaign Creation Modal ── */}
       <Modal visible={campaignModalVisible} animationType="slide" transparent>
         <View style={styles.modalBg}>
@@ -881,10 +956,21 @@ export default function OutreachScreen() {
                   <Text style={styles.sheetTitle}>{selectedCampaign.name}</Text>
                   <Text style={styles.sheetSubtitle}>{selectedCampaign.totalRecords} contacts</Text>
                 </View>
-                <View style={[styles.statusPill, { backgroundColor: STATUS_COLORS[selectedCampaign.status] + "22" }]}>
-                  <Text style={[styles.statusPillText, { color: STATUS_COLORS[selectedCampaign.status] || Colors.textMuted }]}>
-                    {selectedCampaign.status}
-                  </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={[styles.statusPill, { backgroundColor: STATUS_COLORS[selectedCampaign.status] + "22" }]}>
+                    <Text style={[styles.statusPillText, { color: STATUS_COLORS[selectedCampaign.status] || Colors.textMuted }]}>
+                      {selectedCampaign.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setItemToDelete({ id: selectedCampaign.id, type: 'CAMPAIGN', name: selectedCampaign.name });
+                      setDeleteConfirmVisible(true);
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <Trash2 size={20} color={Colors.error} />
+                  </TouchableOpacity>
                 </View>
               </View>
 
