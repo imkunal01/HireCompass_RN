@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import morgan from "morgan";
 import "dotenv/config";
 
 import clientPromise from "./config/db";
@@ -21,22 +22,39 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// Allow all origins in development (needed for Expo/mobile dev)
+// Allow all origins by default (ideal for mobile/Expo dev), 
+// but can be restricted via ALLOWED_ORIGINS in production.
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? process.env.ALLOWED_ORIGINS?.split(",") || []
-        : true, // allow all origins in dev
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",")
+      : true, 
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie", "Accept", "X-Requested-With"],
   })
 );
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "10mb" }));       // for base64 document uploads
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Logging ──────────────────────────────────────────────────────────────────
+if (process.env.NODE_ENV === "production") {
+  app.use(morgan("combined"));
+} else {
+  // Custom explicit format for development
+  app.use(morgan((tokens, req, res) => {
+    return [
+      "\x1b[36m[API]\x1b[0m",
+      tokens.method(req, res),
+      tokens.url(req, res),
+      "=>",
+      `Status: \x1b[33m${tokens.status(req, res)}\x1b[0m`,
+      `- ${tokens['response-time'](req, res)}ms`
+    ].join(' ');
+  }));
+}
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
