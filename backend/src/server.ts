@@ -1,9 +1,6 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-
-// Load environment variables FIRST before any other imports
-dotenv.config();
+import "dotenv/config";
 
 import clientPromise from "./config/db";
 import authRoutes from "./routes/auth.routes";

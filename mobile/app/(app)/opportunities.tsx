@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,42 +7,24 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import apiClient from "@/services/api";
 import { API_ENDPOINTS } from "@/constants/api";
-import { Colors, Spacing, Type, BorderRadius } from "@/constants/theme";
-import { Card, EmptyState, RouteTracker, Input } from "@/components/ui";
-import { Search, Briefcase, ChevronRight } from "lucide-react-native";
-import {
-  BottomSheetModal,
-  BottomSheetBackdrop,
-  BottomSheetView,
-} from "@gorhom/bottom-sheet";
+import { Colors, Spacing, Type, Shadows } from "@/constants/theme";
+import { Search, SlidersHorizontal, MapPin, Clock } from "lucide-react-native";
+import { EmptyState } from "@/components/ui";
 
-const STATUSES = [
-  { id: "SAVED", label: "Saved" },
-  { id: "INTERESTED", label: "Interested" },
-  { id: "APPLIED", label: "Applied" },
-  { id: "ASSESSMENT", label: "Assessment" },
-  { id: "INTERVIEW", label: "Interview" },
-  { id: "OFFER", label: "Offer" },
-  { id: "REJECTED", label: "Rejected" },
-];
+const FILTER_TABS = ["All", "Saved", "Interested", "Applied", "Assessment", "Interview", "Offer", "Rejected"];
 
 export default function OpportunitiesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // Bottom Sheet state
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
-  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("All");
 
-  // Fetch Jobs
   const { data: jobs = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["jobs"],
     queryFn: async () => {
@@ -51,56 +33,121 @@ export default function OpportunitiesScreen() {
     },
   });
 
-  // Update Status Mutation
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await apiClient.patch(`${API_ENDPOINTS.JOBS}/${id}`, { status });
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      bottomSheetModalRef.current?.dismiss();
-    },
-  });
+  const filteredJobs = jobs.filter(
+    (job: any) => activeTab === "All" || job.status.toLowerCase() === activeTab.toLowerCase()
+  );
 
-  const handleStatusChange = (status: string) => {
-    if (selectedJob) {
-      updateStatusMutation.mutate({ id: selectedJob.id, status });
+  const getStatusConfig = (status: string) => {
+    switch (status.toUpperCase()) {
+      case "INTERVIEW": return { bg: "#FFFBEB", color: "#F59E0B" }; // Orange
+      case "APPLIED": return { bg: "#EFF6FF", color: "#3B82F6" }; // Blue
+      case "ASSESSMENT": return { bg: "#F5F3FF", color: "#8B5CF6" }; // Purple
+      case "OFFER": return { bg: "#ECFDF5", color: "#10B981" }; // Green
+      case "REJECTED": return { bg: "#FEF2F2", color: "#EF4444" }; // Red
+      default: return { bg: "#F1F5F9", color: "#64748B" }; // Gray (Saved/Interested)
     }
   };
 
-  const openBottomSheet = (job: any) => {
-    setSelectedJob(job);
-    bottomSheetModalRef.current?.present();
+  const getLocationConfig = (location: string = "") => {
+    const loc = location.toLowerCase();
+    if (loc.includes("remote")) return { bg: "#ECFDF5", color: "#10B981" };
+    if (loc.includes("hybrid")) return { bg: "#FFFBEB", color: "#F59E0B" };
+    return { bg: "#FEF2F2", color: "#EF4444" }; // Onsite
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.5} />
-    ),
-    []
-  );
+  const getCompanyColor = (companyName: string) => {
+    const colors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#0F172A"];
+    const charCode = companyName.charCodeAt(0) || 0;
+    return colors[charCode % colors.length];
+  };
 
-  const filteredJobs = jobs.filter(
-    (job: any) =>
-      job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.company?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const renderJobCard = ({ item }: { item: any }) => {
+    const statusConfig = getStatusConfig(item.status);
+    const locConfig = getLocationConfig(item.location || item.isRemote ? "Remote" : "Onsite");
+    const companyColor = getCompanyColor(item.company);
+
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.7} 
+        onPress={() => router.push(`/(app)/jobs/${item.id}`)}
+        style={styles.card}
+      >
+        <View style={styles.cardTop}>
+          <View style={styles.cardHeaderLeft}>
+            <View style={[styles.companyIconBox, { backgroundColor: companyColor }]}>
+              <Text style={styles.companyIconText}>{item.company.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View>
+              <Text style={styles.companyName}>{item.company}</Text>
+              <Text style={styles.roleName}>{item.title}</Text>
+            </View>
+          </View>
+          <View style={[styles.statusPill, { backgroundColor: statusConfig.bg }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>
+              {item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase()}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.cardBottom}>
+          <Text style={styles.salaryText}>$ {item.salary || "N/A"}</Text>
+          
+          <View style={[styles.locationTag, { backgroundColor: locConfig.bg }]}>
+            <MapPin size={10} color={locConfig.color} style={{ marginRight: 4 }} />
+            <Text style={[styles.locationText, { color: locConfig.color }]}>
+              {item.location || (item.isRemote ? "Remote" : "Onsite")}
+            </Text>
+          </View>
+
+          <View style={styles.timeTag}>
+            <Clock size={12} color="#94A3B8" style={{ marginRight: 4 }} />
+            <Text style={styles.timeText}>
+               {item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : "Just now"}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Your Jobs</Text>
-        <Input
-          placeholder="Search jobs or companies..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          containerStyle={{ marginBottom: 0 }}
-          style={{ paddingLeft: 40 }}
-        />
-        <View style={styles.searchIcon}>
-          <Search size={18} color={Colors.textFaint} />
+        <View>
+          <Text style={styles.title}>Pipeline</Text>
+          <Text style={styles.subtitle}>{jobs.length} opportunities tracked</Text>
         </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.iconBtn}>
+            <Search size={20} color="#64748B" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn}>
+            <SlidersHorizontal size={20} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.filtersContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersScroll}>
+          {FILTER_TABS.map((tab) => {
+            const isActive = activeTab === tab;
+            const count = tab === "All" ? "" : jobs.filter((j: any) => j.status.toLowerCase() === tab.toLowerCase()).length;
+            
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.filterPill, isActive && styles.filterPillActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{tab}</Text>
+                {count !== "" && count > 0 && (
+                  <Text style={[styles.filterCount, isActive && styles.filterCountActive]}> {count}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {isLoading ? (
@@ -122,79 +169,15 @@ export default function OpportunitiesScreen() {
           }
           ListEmptyComponent={
             <EmptyState
-              icon={Briefcase}
-              title={searchQuery ? "No matches found" : "No jobs tracked yet"}
-              description={searchQuery ? "Try a different search term" : "Start tracking your first application."}
-              actionLabel={searchQuery ? undefined : "Add Job"}
+              title={"No jobs tracked yet"}
+              description={"Start tracking your first application."}
+              actionLabel={"Add Job"}
               onAction={() => router.push("/(app)/import")}
             />
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/(app)/jobs/${item.id}`)}>
-              <Card variant="elevated" style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.jobInfo}>
-                    <Text style={styles.jobRole}>{item.title}</Text>
-                    <Text style={styles.jobCompany}>{item.company}</Text>
-                  </View>
-                  <View style={styles.typePill}>
-                    <Text style={styles.typePillText}>{item.employmentType}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.statusActionRow}>
-                  <View style={{ flex: 1 }}>
-                    <RouteTracker stage={item.status} />
-                  </View>
-                  <TouchableOpacity
-                    style={styles.updateStatusBtn}
-                    onPress={() => openBottomSheet(item)}
-                  >
-                    <Text style={styles.updateStatusText}>Move</Text>
-                    <ChevronRight size={16} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              </Card>
-            </TouchableOpacity>
-          )}
+          renderItem={renderJobCard}
         />
       )}
-
-      <BottomSheetModal
-        ref={bottomSheetModalRef}
-        snapPoints={["50%"]}
-        backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: Colors.surfaceHighlight }}
-        handleIndicatorStyle={{ backgroundColor: Colors.border }}
-      >
-        <BottomSheetView style={styles.sheetContent}>
-          <Text style={styles.sheetTitle}>Update Status</Text>
-          <Text style={styles.sheetSubtitle}>
-            {selectedJob?.title} at {selectedJob?.company}
-          </Text>
-          <View style={styles.sheetOptions}>
-            {STATUSES.map((s) => (
-              <TouchableOpacity
-                key={s.id}
-                style={[
-                  styles.sheetOption,
-                  selectedJob?.status === s.id && styles.sheetOptionSelected,
-                ]}
-                onPress={() => handleStatusChange(s.id)}
-              >
-                <Text
-                  style={[
-                    styles.sheetOptionText,
-                    selectedJob?.status === s.id && styles.sheetOptionTextSelected,
-                  ]}
-                >
-                  {s.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </BottomSheetView>
-      </BottomSheetModal>
     </View>
   );
 }
@@ -202,7 +185,7 @@ export default function OpportunitiesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: "#F8F9FA",
   },
   center: {
     flex: 1,
@@ -210,110 +193,166 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
+    paddingTop: Spacing.md,
+    marginBottom: Spacing.md,
   },
   title: {
-    ...Type.h1,
-    marginBottom: Spacing.lg,
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    color: "#1E293B",
   },
-  searchIcon: {
-    position: "absolute",
-    left: Spacing.lg + 12,
-    bottom: Spacing.md + 14,
+  subtitle: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  filtersContainer: {
+    marginBottom: Spacing.md,
+  },
+  filtersScroll: {
+    paddingHorizontal: Spacing.lg,
+    gap: 8,
+  },
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF", // white background as per UI
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  filterPillActive: {
+    backgroundColor: "#6B46FF",
+  },
+  filterText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#64748B",
+  },
+  filterTextActive: {
+    color: "#FFFFFF",
+  },
+  filterCount: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#94A3B8",
+  },
+  filterCountActive: {
+    color: "rgba(255,255,255,0.7)",
   },
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: 120, // Tab bar padding
-    paddingTop: Spacing.md,
   },
   card: {
-    marginBottom: Spacing.md,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    ...Shadows.card,
   },
-  cardHeader: {
+  cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: Spacing.md,
+    marginBottom: 16,
   },
-  jobInfo: {
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     flex: 1,
-    paddingRight: Spacing.md,
   },
-  jobRole: {
-    ...Type.h2,
-    marginBottom: 4,
+  companyIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  jobCompany: {
-    ...Type.bodyMed,
-    color: Colors.textMuted,
+  companyIconText: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
+    color: "#FFFFFF",
   },
-  typePill: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  companyName: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#1E293B",
+  },
+  roleName: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#64748B",
+    marginTop: 2,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  cardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  salaryText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: "#94A3B8",
+  },
+  locationTag: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 8,
   },
-  typePillText: {
-    ...Type.micro,
-    color: Colors.textSecondary,
+  locationText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
   },
-  statusActionRow: {
+  timeTag: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: Spacing.sm,
+    marginLeft: "auto",
   },
-  updateStatusBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.primaryMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  updateStatusText: {
-    ...Type.micro,
-    color: Colors.primary,
-    marginRight: 4,
-    fontWeight: "600",
-  },
-  sheetContent: {
-    flex: 1,
-    padding: Spacing.xl,
-  },
-  sheetTitle: {
-    ...Type.h2,
-    marginBottom: 4,
-  },
-  sheetSubtitle: {
-    ...Type.body,
-    color: Colors.textMuted,
-    marginBottom: Spacing.lg,
-  },
-  sheetOptions: {
-    gap: 8,
-  },
-  sheetOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sheetOptionSelected: {
-    backgroundColor: Colors.primaryMuted,
-    borderColor: Colors.primary,
-  },
-  sheetOptionText: {
-    ...Type.bodyMed,
-  },
-  sheetOptionTextSelected: {
-    color: Colors.primary,
-    fontWeight: "600",
+  timeText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#94A3B8",
   },
 });

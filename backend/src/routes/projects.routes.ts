@@ -41,7 +41,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 // POST /api/projects
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { name, description, techStack, roleCategories, metrics, links } = req.body;
+    const { name, description, techStack, roleCategories, metrics, links, isFeatured } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: "Project name is required" });
@@ -59,6 +59,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       techStack: techStack || [],
       roleCategories: roleCategories || [],
       metrics: metrics || [],
+      isFeatured: isFeatured || false,
       links: {
         github: links?.github || null,
         live: links?.live || null,
@@ -107,7 +108,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 // PATCH /api/projects/:id
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { name, description, techStack, roleCategories, metrics, links, snippets } = req.body;
+    const { name, description, techStack, roleCategories, metrics, links, snippets, isFeatured } = req.body;
 
     const client = await clientPromise;
     const db = client.db();
@@ -118,6 +119,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     if (techStack !== undefined) updateDoc.techStack = techStack;
     if (roleCategories !== undefined) updateDoc.roleCategories = roleCategories;
     if (metrics !== undefined) updateDoc.metrics = metrics;
+    if (isFeatured !== undefined) updateDoc.isFeatured = isFeatured;
     if (links !== undefined) updateDoc.links = links;
     if (snippets !== undefined) updateDoc.snippets = snippets;
 

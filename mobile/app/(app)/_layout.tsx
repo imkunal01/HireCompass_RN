@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.75)",
+    backgroundColor: "rgba(249, 249, 249, 0)", // 0% opacity as requested, relying entirely on BlurView
     borderRadius: 40,
     paddingHorizontal: 8,
     paddingVertical: 16,

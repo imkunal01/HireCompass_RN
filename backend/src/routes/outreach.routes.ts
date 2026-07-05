@@ -9,35 +9,46 @@ import * as cheerio from "cheerio";
 
 const router = Router();
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
-const FROM_EMAIL = process.env.GMAIL_USER || "";
+const getTransporter = () => {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+};
+const getFromEmail = () => process.env.GMAIL_USER || "";
 
 // ==========================================
 // NETWORK CONTACTS (For new Outreach UI)
 // ==========================================
 // GET /api/outreach
+// If ?campaignId= is provided, returns only records for that campaign.
+// Otherwise returns all contacts for the user (for the Contacts tab).
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = await clientPromise;
-    // We treat outreach_records as the "Network Contacts" list
+    const { campaignId } = req.query;
+
+    const query: Record<string, any> = { userId: req.user!.id };
+    if (campaignId && typeof campaignId === "string") {
+      query.campaignId = campaignId;
+    }
+
     const records = await client.db().collection("outreach_records")
-      .find({ userId: req.user!.id })
+      .find(query)
       .sort({ createdAt: -1 })
-      .limit(50)
       .toArray();
-    
-    const mapped = records.map(r => ({
+
+    const mapped = records.map((r: any) => ({
       id: r._id.toString(),
+      campaignId: r.campaignId || null,
       name: r.recruiterName || "Unknown",
       role: r.recruiterRole || "Recruiter",
       company: r.companyName || "Unknown",
-      platform: "linkedin", // Mocked or derived from context if needed
+      email: r.recruiterEmail || "",
+      platform: "linkedin",
       status: r.status || "PENDING",
       addedAt: r.createdAt
     }));
@@ -48,6 +59,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 // ==========================================
 // CAMPAIGNS
@@ -496,10 +508,10 @@ router.post("/send", requireAuth, async (req: Request, res: Response) => {
 
         if (!toEmail || !emailBody) throw new Error("Missing recipient email or email body");
 
-        const payload: any = { from: FROM_EMAIL, to: [toEmail], subject, text: emailBody };
+        const payload: any = { from: getFromEmail(), to: [toEmail], subject, text: emailBody };
         if (attachmentData) payload.attachments = [{ filename: attachmentData.filename, content: attachmentData.content }];
 
-        const info = await transporter.sendMail(payload);
+        const info = await getTransporter().sendMail(payload);
         const sentAt = new Date();
 
         await db.collection("outreach_records").updateOne(
@@ -621,10 +633,10 @@ Return JSON: { "subject": "...", "body": "..." }`;
       if (cvDoc?.data) attachmentData = { filename: cvDoc.name, content: cvDoc.data };
     }
 
-    const payload: any = { from: FROM_EMAIL, to: [record.recruiterEmail], subject: generated.subject || `Following up – ${record.companyName}`, text: generated.body };
+    const payload: any = { from: getFromEmail(), to: [record.recruiterEmail], subject: generated.subject || `Following up – ${record.companyName}`, text: generated.body };
     if (attachmentData) payload.attachments = [{ filename: attachmentData.filename, content: attachmentData.content }];
 
-    const info = await transporter.sendMail(payload);
+    const info = await getTransporter().sendMail(payload);
     const now = new Date();
     await db.collection("outreach_records").updateOne({ _id: new ObjectId(recordId) }, { $set: { status: "FOLLOW_UP_SENT", followUpSentAt: now, updatedAt: now } });
 

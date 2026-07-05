@@ -23,6 +23,7 @@ export interface Project {
   techStack: string[]          // ["Next.js", "MongoDB", "Groq"]
   roleCategories: string[]     // ["fullstack", "backend"] — broad category hints
   metrics: string[]            // ["reduced load time 40%", "10k users"]
+  isFeatured?: boolean
   links: ProjectLinks
   snippets: ProjectSnippet[]
   createdAt: string | Date
